@@ -55,8 +55,26 @@ export function normalizeFacadeResult<T = unknown>(
 
   switch (method) {
   case 'createWallet':
+    return {
+      ...result,
+      mnemonic: nilSlice(result.mnemonic),
+      descriptors: nilSlice(result.descriptors),
+    } as T;
   case 'openWalletFromPasskey':
     return { ...result, mnemonic: nilSlice(result.mnemonic) } as T;
+  case 'startDescriptorWallet': {
+    // Descriptor wallets have no mnemonic; strip it defensively, as for
+    // external-seed wallets, and give descriptors an array shape.
+    const sanitized: Record<string, unknown> = {
+      ...result,
+      descriptors: nilSlice(result.descriptors),
+    };
+    delete sanitized.mnemonic;
+
+    return sanitized as T;
+  }
+  case 'listWalletDescriptors':
+    return { ...result, descriptors: nilSlice(result.descriptors) } as T;
   case 'startExternalSeedWallet': {
     // A paired daemon never returns backup words for this lifecycle. Strip the
     // field defensively so an older or mismatched runtime cannot surface an

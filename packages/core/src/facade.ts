@@ -1,7 +1,9 @@
 import type { RuntimeConfig } from './config.ts';
 import type {
   CreateWalletRequest,
+  DescriptorWalletRequest,
   ExternalSeedWalletRequest,
+  ListWalletDescriptorsRequest,
   UnlockWalletRequest,
 } from './requests.ts';
 import { WavelengthError } from './errors.ts';
@@ -13,6 +15,7 @@ import { WavelengthError } from './errors.ts';
 export const FACADE_METHODS = [
   'start',
   'startExternalSeedWallet',
+  'startDescriptorWallet',
   'stop',
   'getInfo',
   'status',
@@ -20,6 +23,7 @@ export const FACADE_METHODS = [
   'createWallet',
   'unlockWallet',
   'openWalletFromPasskey',
+  'listWalletDescriptors',
   'deposit',
   'receive',
   'prepareSend',
@@ -108,6 +112,20 @@ export type ExternalSeedWalletStartParams = {
 };
 
 /**
+ * Private mobile/WASM transport envelope for the typed descriptor wallet
+ * lifecycle. Hosts use `DescriptorWalletClient.startDescriptorWallet()`
+ * instead of constructing it.
+ */
+export type DescriptorWalletStartParams = {
+  config: MobileConfig;
+  descriptors: string[];
+  birthday_unix?: number;
+  expected_identity_pubkey?: string;
+  recover_state?: boolean;
+  recovery_window?: number;
+};
+
+/**
  * Maps the public RuntimeConfig onto the flat config the mobile facade
  * expects.
  *
@@ -178,6 +196,24 @@ export function toExternalSeedWalletStartParams(
   return {
     config: toMobileConfig(config, serverTransport),
     seed_entropy: base64FromBytes(req.seedEntropy),
+    expected_identity_pubkey: req.expectedIdentityPubKey,
+    recover_state: req.recoverState,
+    recovery_window: req.recoveryWindow,
+  };
+}
+
+/** Maps the typed descriptor request onto the private facade envelope. */
+export function toDescriptorWalletStartParams(
+  config: RuntimeConfig,
+  req: DescriptorWalletRequest,
+  serverTransport: ServerTransport,
+): DescriptorWalletStartParams {
+  return {
+    config: toMobileConfig(config, serverTransport),
+    descriptors: [...req.descriptors],
+    birthday_unix: req.birthday
+      ? Math.floor(req.birthday.getTime() / 1000)
+      : undefined,
     expected_identity_pubkey: req.expectedIdentityPubKey,
     recover_state: req.recoverState,
     recovery_window: req.recoveryWindow,
@@ -258,6 +294,26 @@ export function toGoCreateWalletReq(req: CreateWalletRequest) {
     // the daemon apply its own defaults.
     RecoverState: req.recoverState,
     RecoveryWindow: req.recoveryWindow,
+    Descriptors: req.descriptors,
+    // Go's time.Time decodes RFC 3339 text.
+    Birthday: req.birthday?.toISOString(),
+  };
+}
+
+/**
+ * Maps the TS-convention {@link ListWalletDescriptorsRequest} to the Go JSON
+ * shape, base64-encoding the passphrase for the []byte field.
+ */
+export function toGoListWalletDescriptorsReq(
+  req: ListWalletDescriptorsRequest,
+) {
+  return {
+    IncludePrivate: req.includePrivate,
+    Mnemonic: req.mnemonic,
+    SeedPassphrase: req.seedPassphrase
+      ? base64FromUtf8(req.seedPassphrase)
+      : undefined,
+    Descriptors: req.descriptors,
   };
 }
 

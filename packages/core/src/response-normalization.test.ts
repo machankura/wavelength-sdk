@@ -27,7 +27,22 @@ it('normalizes known pointer and slice fields without rewriting unrelated nulls'
 });
 
 it('normalizes every array result family', () => {
-  assert.deepEqual(normalizeFacadeResult('createWallet', { Mnemonic: null }), { mnemonic: [] });
+  assert.deepEqual(
+    normalizeFacadeResult('createWallet', { Mnemonic: null, Descriptors: null }),
+    { mnemonic: [], descriptors: [] },
+  );
+  assert.deepEqual(
+    normalizeFacadeResult('startDescriptorWallet', {
+      Imported: true,
+      Descriptors: null,
+      Mnemonic: ['must', 'not', 'escape'],
+    }),
+    { imported: true, descriptors: [] },
+  );
+  assert.deepEqual(
+    normalizeFacadeResult('listWalletDescriptors', { Descriptors: null }),
+    { descriptors: [] },
+  );
   assert.deepEqual(normalizeFacadeResult('openWalletFromPasskey', { Mnemonic: null }), { mnemonic: [] });
   assert.deepEqual(
     normalizeFacadeResult('startExternalSeedWallet', {

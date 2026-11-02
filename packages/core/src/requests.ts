@@ -30,7 +30,116 @@ export type CreateWalletRequest = {
    * its own default; raise it if a wallet skipped a large gap of addresses.
    */
   recoveryWindow?: number;
+  /**
+   * Private output descriptors to build the wallet from instead of a mnemonic,
+   * for example `tr(xprv.../86h/0h/0h/<0;1>/*)`. They must either share one
+   * BIP32 master key, or be account-level private keys covering the on-chain
+   * account and every key family. Mutually exclusive with `mnemonic` and
+   * `seedPassphrase`. Private descriptors are as sensitive as a seed.
+   */
+  descriptors?: string[];
+  /**
+   * The earliest date the descriptor keys may have received funds; bounds the
+   * first rescan of a descriptor import. Omit to scan from genesis. Ignored for
+   * mnemonics, which carry their own birthday.
+   */
+  birthday?: Date;
 };
+
+/**
+ * Parameters for listing a wallet's output descriptors.
+ */
+export type ListWalletDescriptorsRequest = {
+  /**
+   * Requests private descriptors. Requires the wallet's `mnemonic` or its
+   * private root `descriptors`, which the daemon checks against the open wallet
+   * before rendering anything private.
+   */
+  includePrivate?: boolean;
+  /** The wallet's mnemonic, resupplied to authorize private export. */
+  mnemonic?: string[];
+  /** The optional passphrase for `mnemonic`. */
+  seedPassphrase?: string;
+  /** The wallet's private root descriptors, resupplied to authorize export. */
+  descriptors?: string[];
+};
+
+/**
+ * Opens one daemon wallet from private output descriptors. The daemon accepts
+ * either of two forms. Descriptors that share one BIP32 master key: `tr()` under
+ * `86h/0h/0h` and `wpkh()` under `84h/0h/0h`, coin type 0' on every network, with
+ * branch `0`, `1` or `<0;1>`. Or account-level private keys: the BIP86 account
+ * with its origin, `tr([fp/86h/0h/0h]xprv.../<0;1>/*)`, and the key families as
+ * `[fp/1017h/COINh]xprv...` or one entry per family. A partial set is refused.
+ */
+export type DescriptorWalletRequest = {
+  /** The private descriptors. They are as sensitive as a seed. */
+  descriptors: string[];
+  /** The earliest date the keys may have received funds; omit to scan from genesis. */
+  birthday?: Date;
+  /**
+   * The identity public key observed on a previous open. The daemon also always
+   * checks the opened wallet against the identity the descriptors derive.
+   */
+  expectedIdentityPubKey?: string;
+  /** Runs the daemon's state-recovery scan for this open operation. */
+  recoverState?: boolean;
+  /** Recovery look-ahead for each address family; must fit in a uint32. */
+  recoveryWindow?: number;
+};
+
+/** Validates a descriptor wallet request before startup. */
+export function validateDescriptorWalletRequest(
+  req: DescriptorWalletRequest,
+): void {
+  if (
+    !Array.isArray(req.descriptors) ||
+    req.descriptors.length === 0 ||
+    req.descriptors.some((d) => typeof d !== 'string' || d.trim() === '')
+  ) {
+    throw new WavelengthError(
+      'descriptors must be a nonempty array of nonempty strings',
+      'invalid_descriptor',
+    );
+  }
+  if (
+    req.birthday !== undefined &&
+    (!(req.birthday instanceof Date) || Number.isNaN(req.birthday.getTime()) ||
+      req.birthday.getTime() < 0)
+  ) {
+    throw new WavelengthError(
+      'birthday must be a valid Date at or after the Unix epoch',
+      'invalid_descriptor',
+    );
+  }
+  if (
+    req.expectedIdentityPubKey !== undefined &&
+    (typeof req.expectedIdentityPubKey !== 'string' ||
+      req.expectedIdentityPubKey === '')
+  ) {
+    throw new WavelengthError(
+      'expectedIdentityPubKey must be a nonempty string',
+      'invalid_descriptor',
+    );
+  }
+  if (req.recoverState !== undefined && typeof req.recoverState !== 'boolean') {
+    throw new WavelengthError(
+      'recoverState must be a boolean',
+      'invalid_descriptor',
+    );
+  }
+  if (
+    req.recoveryWindow !== undefined &&
+    (!Number.isSafeInteger(req.recoveryWindow) ||
+      req.recoveryWindow < 0 ||
+      req.recoveryWindow > 0xffff_ffff)
+  ) {
+    throw new WavelengthError(
+      'recoveryWindow must be an integer that fits in uint32',
+      'invalid_descriptor',
+    );
+  }
+}
 
 /**
  * Parameters for unlocking an existing wallet.
@@ -281,10 +390,19 @@ export type SweepWalletRequest = {
 };
 
 /**
- * A restore-from-mnemonic request: creation options stay meaningful on import,
- * and the mnemonic is mandatory.
+ * A restore request: creation options stay meaningful on import, and exactly
+ * one source is mandatory, either a mnemonic or private output descriptors.
  */
-export type RestoreWalletRequest = CreateWalletRequest & {
-  /** The recovery phrase to restore from. */
-  mnemonic: string[];
-};
+export type RestoreWalletRequest = CreateWalletRequest &
+  (
+    | {
+        /** The recovery phrase to restore from. */
+        mnemonic: string[];
+        descriptors?: undefined;
+      }
+    | {
+        /** The private descriptors to restore from. */
+        descriptors: string[];
+        mnemonic?: undefined;
+      }
+  );

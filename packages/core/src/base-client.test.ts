@@ -44,6 +44,7 @@ describe('BaseWavelengthClient', () => {
       if (
         method === 'start' ||
         method === 'startExternalSeedWallet' ||
+        method === 'startDescriptorWallet' ||
         method === 'stop'
       ) {
         continue;
@@ -67,6 +68,10 @@ describe('BaseWavelengthClient', () => {
       [
         'startExternalSeedWallet',
         'ExternalSeedWalletClient.startExternalSeedWallet()',
+      ],
+      [
+        'startDescriptorWallet',
+        'DescriptorWalletClient.startDescriptorWallet()',
       ],
       ['stop', 'stop()'],
     ] as const;
@@ -205,6 +210,135 @@ describe('BaseWavelengthClient', () => {
       client.calls.some((call) => call.method === 'startExternalSeedWallet'),
       false,
     );
+  });
+
+  it('maps descriptor startup to the private snake-case envelope', async () => {
+    const client = new FakeClient();
+    client.responses.set('startDescriptorWallet', {
+      Imported: true,
+      IdentityPubKey: 'identity',
+      RootFingerprint: 'd34db33f',
+      Descriptors: ['tr([d34db33f/86h/0h/0h]tpub/<0;1>/*)'],
+    });
+    const descriptors = ['tr(tprv/86h/0h/0h/<0;1>/*)'];
+    const result = await client.startDescriptorWallet(
+      {
+        network: 'regtest',
+        dataDir: '/wallets',
+        arkServerAddress: 'h:7070',
+      },
+      {
+        descriptors,
+        birthday: new Date('2026-01-01T00:00:00Z'),
+        expectedIdentityPubKey: 'identity',
+        recoverState: true,
+        recoveryWindow: 99,
+      },
+    );
+
+    assert.deepEqual(client.calls[0], {
+      method: 'startDescriptorWallet',
+      params: {
+        config: {
+          data_dir: '/wallets',
+          network: 'regtest',
+          server_address: 'h:7070',
+          server_transport: 'grpc',
+          swap_server_transport: 'grpc',
+          wallet_type: 'lwwallet',
+        },
+        descriptors,
+        birthday_unix: 1767225600,
+        expected_identity_pubkey: 'identity',
+        recover_state: true,
+        recovery_window: 99,
+      },
+    });
+    assert.equal(result.identityPubKey, 'identity');
+    assert.equal(result.rootFingerprint, 'd34db33f');
+    assert.deepEqual(result.descriptors, [
+      'tr([d34db33f/86h/0h/0h]tpub/<0;1>/*)',
+    ]);
+    assert.equal(Object.hasOwn(result, 'mnemonic'), false);
+  });
+
+  it('rejects invalid descriptor requests and a missing dataDir before dispatch', async () => {
+    const client = new FakeClient();
+    const config = {
+      network: 'regtest',
+      dataDir: '/wallets',
+      arkServerAddress: 'h:7070',
+    };
+    for (const req of [
+      { descriptors: [] },
+      { descriptors: [''] },
+      { descriptors: ['tr(x)'], birthday: new Date('not a date') },
+      { descriptors: ['tr(x)'], recoveryWindow: -1 },
+      { descriptors: ['tr(x)'], expectedIdentityPubKey: '' },
+    ]) {
+      await assert.rejects(
+        client.startDescriptorWallet(config, req),
+        (err: WavelengthError) => err.code === 'invalid_descriptor',
+      );
+    }
+    await assert.rejects(
+      client.startDescriptorWallet(
+        { network: 'regtest', arkServerAddress: 'h:7070' },
+        { descriptors: ['tr(x)'] },
+      ),
+      (err: WavelengthError) => err.code === 'invalid_config',
+    );
+    assert.equal(
+      client.calls.some((call) => call.method === 'startDescriptorWallet'),
+      false,
+    );
+  });
+
+  it('listWalletDescriptors maps private export to the Go shape', async () => {
+    const client = new FakeClient();
+    client.responses.set('listWalletDescriptors', {
+      Descriptors: ['tr(tprv/86h/0h/0h/<0;1>/*)'],
+      IncludesPrivate: true,
+    });
+    const result = await client.listWalletDescriptors({
+      includePrivate: true,
+      mnemonic: ['abandon', 'ability'],
+      seedPassphrase: 'pass',
+    });
+
+    assert.deepEqual(client.calls[0], {
+      method: 'listWalletDescriptors',
+      params: {
+        IncludePrivate: true,
+        Mnemonic: ['abandon', 'ability'],
+        SeedPassphrase: Buffer.from('pass').toString('base64'),
+        Descriptors: undefined,
+      },
+    });
+    assert.equal(result.includesPrivate, true);
+    assert.deepEqual(result.descriptors, ['tr(tprv/86h/0h/0h/<0;1>/*)']);
+
+    await client.listWalletDescriptors();
+    assert.deepEqual(client.calls[1].params, {
+      IncludePrivate: undefined,
+      Mnemonic: undefined,
+      SeedPassphrase: undefined,
+      Descriptors: undefined,
+    });
+  });
+
+  it('createWallet forwards descriptors and an RFC 3339 birthday', async () => {
+    const client = new FakeClient();
+    await client.createWallet({
+      password: 'hunter2hunter2',
+      descriptors: ['tr(tprv/86h/0h/0h/<0;1>/*)'],
+      birthday: new Date('2026-01-01T00:00:00Z'),
+    });
+
+    const params = client.calls[0].params as Record<string, unknown>;
+    assert.deepEqual(params.Descriptors, ['tr(tprv/86h/0h/0h/<0;1>/*)']);
+    assert.equal(params.Birthday, '2026-01-01T00:00:00.000Z');
+    assert.equal(params.Mnemonic, undefined);
   });
 
   it('createWallet sends the Go-shaped request with a base64 password', async () => {

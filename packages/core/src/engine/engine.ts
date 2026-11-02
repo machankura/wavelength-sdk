@@ -145,8 +145,8 @@ export interface WalletEngine {
    * wallet is usable; the optional server-assisted recovery scan continues in
    * the background, observed through snapshot.recovery. Rejects when the
    * restore fails before the wallet came up, when a restore is already in
-   * flight, when req.mnemonic is missing or empty, or if the engine has been
-   * disposed.
+   * flight, when neither or both of req.mnemonic and req.descriptors are set,
+   * or if the engine has been disposed.
    */
   restoreWallet(req: RestoreWalletRequest): Promise<WalletInfo>;
   /** Resets snapshot.recovery to idle (e.g. after dismissing a banner). */
@@ -443,8 +443,14 @@ class WavelengthEngine implements WalletEngine {
     if (this.#disposed) {
       return Promise.reject(new Error('the engine has been disposed'));
     }
-    if (!req.mnemonic || req.mnemonic.length === 0) {
-      return Promise.reject(new Error('a restore needs a mnemonic'));
+    const hasMnemonic = Boolean(req.mnemonic && req.mnemonic.length > 0);
+    const hasDescriptors = Boolean(
+      req.descriptors && req.descriptors.length > 0,
+    );
+    if (hasMnemonic === hasDescriptors) {
+      return Promise.reject(
+        new Error('a restore needs a mnemonic or descriptors, not both'),
+      );
     }
     if (this.#restore && !this.#restore.settled) {
       // A second concurrent restore would otherwise clobber #restore and

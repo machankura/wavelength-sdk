@@ -140,7 +140,7 @@ export function useWalletCreate(): UseWalletCreateResult {
 
 /** The result of {@link useWalletRestore}. */
 export type UseWalletRestoreResult = {
-  /** Restores a wallet from a mnemonic. */
+  /** Restores a wallet from a mnemonic or from private output descriptors. */
   restore: (req: RestoreWalletRequest) => Promise<WalletInfo>;
   /** True while a restore is in flight. */
   restorePending: boolean;

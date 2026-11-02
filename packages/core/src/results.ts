@@ -29,6 +29,14 @@ export type ExternalSeedWalletOpenResult = {
   recoveredOORRecipientEvents: number;
 };
 
+/** Result of atomically starting and opening a descriptor daemon wallet. */
+export type DescriptorWalletOpenResult = ExternalSeedWalletOpenResult & {
+  /** The hex BIP32 fingerprint of the wallet's master key. */
+  rootFingerprint: string;
+  /** The public descriptors the wallet watches, safe for watch-only software. */
+  descriptors: string[];
+};
+
 /**
  * Augments the wire send shape with `paymentHash`, the canonical place to read
  * a Lightning payment hash for a send. The daemon returns it from prepareSend
@@ -53,6 +61,7 @@ export type {
   ExitStatusResult,
   GetExitPlanResult,
   ListResult,
+  ListWalletDescriptorsResult,
   ReceiveResult,
   SweepWalletResult,
   UnlockWalletResult,

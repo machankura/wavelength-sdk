@@ -624,6 +624,42 @@ describe('engine restore', () => {
     mock.timers.reset();
   });
 
+  it('restores from descriptors and refuses neither or both sources', async () => {
+    mock.timers.enable({ apis: ['setInterval', 'setTimeout'] });
+    const { client, engine } = await needsWalletEngine();
+    client.info = readyInfo;
+    let created: unknown;
+    client.impl('createWallet', (args) => {
+      created = args[0];
+
+      return Promise.resolve({});
+    });
+
+    await engine.restoreWallet({
+      password: 'pw',
+      descriptors: ['tr(tprv/86h/0h/0h/<0;1>/*)'],
+    });
+    assert.deepEqual(
+      (created as { descriptors: string[] }).descriptors,
+      ['tr(tprv/86h/0h/0h/<0;1>/*)'],
+    );
+
+    await assert.rejects(
+      () => engine.restoreWallet({ password: 'pw' } as never),
+      /a restore needs a mnemonic or descriptors/,
+    );
+    await assert.rejects(
+      () => engine.restoreWallet({
+        password: 'pw',
+        mnemonic: ['a'],
+        descriptors: ['tr(x)'],
+      } as never),
+      /not both/,
+    );
+    engine.dispose();
+    mock.timers.reset();
+  });
+
   it('an untracked restore never touches the recovery banner state', async () => {
     mock.timers.enable({ apis: ['setInterval', 'setTimeout'] });
     const { client, engine } = await needsWalletEngine();

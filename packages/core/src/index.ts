@@ -48,12 +48,14 @@ export type {
 export type {
   CreateWalletRequest,
   DepositRequest,
+  DescriptorWalletRequest,
   ExternalSeedWalletRequest,
   ExitRequest,
   ExitStatusRequest,
   ExitSummaryRequest,
   GetExitPlanRequest,
   ListRequest,
+  ListWalletDescriptorsRequest,
   OpenWalletFromPasskeyRequest,
   ReceiveRequest,
   RestoreWalletRequest,
@@ -63,6 +65,7 @@ export type {
 } from './requests.ts';
 export {
   FORCE_UNROLL_ACK,
+  validateDescriptorWalletRequest,
   validateExternalSeedWalletRequest,
 } from './requests.ts';
 export type { ActivityStreamOptions } from './activity-options.ts';
@@ -74,6 +77,7 @@ export type {
   CreateWalletResult,
   CreditPreview,
   DepositResult,
+  DescriptorWalletOpenResult,
   Entry,
   EntryFailureCode,
   EntryKind,
@@ -97,6 +101,7 @@ export type {
   GetExitPlanResult,
   ListResult,
   ListView,
+  ListWalletDescriptorsResult,
   OnchainHistory,
   OnchainTx,
   OpenWalletFromPasskeyResult,
@@ -177,8 +182,9 @@ export type {
 } from './exit.ts';
 
 // The stable client contract every transport implements, plus the additive
-// capability used by caller-owned external-seed startup.
+// capabilities used by caller-owned external-seed and descriptor startup.
 export type {
+  DescriptorWalletClient,
   ExternalSeedWalletClient,
   WavelengthClient,
 } from './client.ts';

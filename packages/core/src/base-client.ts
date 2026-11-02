@@ -1,29 +1,36 @@
 import type {
   CreateWalletRequest,
   DepositRequest,
+  DescriptorWalletRequest,
   ExternalSeedWalletRequest,
   ExitRequest,
   ExitStatusRequest,
   ExitSummaryRequest,
   GetExitPlanRequest,
   ListRequest,
+  ListWalletDescriptorsRequest,
   OpenWalletFromPasskeyRequest,
   ReceiveRequest,
   SendRequest,
   SweepWalletRequest,
   UnlockWalletRequest,
 } from './requests.ts';
-import { validateExternalSeedWalletRequest } from './requests.ts';
+import {
+  validateDescriptorWalletRequest,
+  validateExternalSeedWalletRequest,
+} from './requests.ts';
 import type {
   Balance,
   CreateWalletResult,
   DepositResult,
+  DescriptorWalletOpenResult,
   ExternalSeedWalletOpenResult,
   ExitResult,
   ExitStatusResult,
   ExitSummaryResult,
   GetExitPlanResult,
   ListResult,
+  ListWalletDescriptorsResult,
   OpenWalletFromPasskeyResult,
   PrepareSendResult,
   ReceiveResult,
@@ -32,14 +39,19 @@ import type {
   UnlockWalletResult,
 } from './results.ts';
 import { validateRuntimeConfig, type RuntimeConfig } from './config.ts';
-import type { ExternalSeedWalletClient } from './client.ts';
+import type {
+  DescriptorWalletClient,
+  ExternalSeedWalletClient,
+} from './client.ts';
 import type { WavelengthEvent, WavelengthListener } from './events.ts';
 import type { WalletInfo, WalletStatus } from './state.ts';
 import type { FacadeMethod, ServerTransport } from './facade.ts';
 import {
   assertFacadeMethod,
+  toDescriptorWalletStartParams,
   toExternalSeedWalletStartParams,
   toGoCreateWalletReq,
+  toGoListWalletDescriptorsReq,
   toGoUnlockWalletReq,
   toMobileConfig,
 } from './facade.ts';
@@ -64,7 +76,8 @@ import {
  * catalog, public contract, native dispatch, and response normalization remain
  * separate synchronization points.
  */
-export abstract class BaseWavelengthClient implements ExternalSeedWalletClient {
+export abstract class BaseWavelengthClient
+  implements ExternalSeedWalletClient, DescriptorWalletClient {
   protected readonly listeners = new Set<WavelengthListener>();
 
   // Serializes runtime lifecycle operations for transports that route start and
@@ -86,8 +99,9 @@ export abstract class BaseWavelengthClient implements ExternalSeedWalletClient {
   /** How this transport's daemon dials the Ark and swap servers. */
   protected abstract readonly serverTransport: ServerTransport;
 
-  // The raw facade escape hatch rejects start, startExternalSeedWallet, and
-  // stop so they can only run through typed lifecycle methods. Those are where
+  // The raw facade escape hatch rejects start, startExternalSeedWallet,
+  // startDescriptorWallet, and stop so they can only run through typed
+  // lifecycle methods. Those are where
   // web transports take and release the cross-tab runtime lock; a raw call
   // would bypass it. Typed methods dispatch through callFacadeInternal instead.
   async callFacade<T = unknown>(
@@ -97,11 +111,14 @@ export abstract class BaseWavelengthClient implements ExternalSeedWalletClient {
     if (
       method === 'start' ||
       method === 'startExternalSeedWallet' ||
+      method === 'startDescriptorWallet' ||
       method === 'stop'
     ) {
       const typedCall = method === 'startExternalSeedWallet'
         ? 'ExternalSeedWalletClient.startExternalSeedWallet()'
-        : `${method}()`;
+        : method === 'startDescriptorWallet'
+          ? 'DescriptorWalletClient.startDescriptorWallet()'
+          : `${method}()`;
       throw new WavelengthError(
         `Call ${typedCall} instead of callFacade('${method}'): the ` +
           `${method} lifecycle verb runs through the typed method, which ` +
@@ -184,6 +201,34 @@ export abstract class BaseWavelengthClient implements ExternalSeedWalletClient {
     return this.callFacadeInternal<ExternalSeedWalletOpenResult>(
       'startExternalSeedWallet',
       toExternalSeedWalletStartParams(config, req, this.serverTransport),
+    );
+  }
+
+  async startDescriptorWallet(
+    config: RuntimeConfig,
+    req: DescriptorWalletRequest,
+  ): Promise<DescriptorWalletOpenResult> {
+    validateRuntimeConfig(config, this.serverTransport);
+    validateDescriptorWalletRequest(req);
+    if (typeof config.dataDir !== 'string' || config.dataDir.trim() === '') {
+      throw new WavelengthError(
+        'startDescriptorWallet requires a final nonempty config.dataDir',
+        'invalid_config',
+      );
+    }
+
+    return this.callFacadeInternal<DescriptorWalletOpenResult>(
+      'startDescriptorWallet',
+      toDescriptorWalletStartParams(config, req, this.serverTransport),
+    );
+  }
+
+  listWalletDescriptors(
+    req: ListWalletDescriptorsRequest = {},
+  ): Promise<ListWalletDescriptorsResult> {
+    return this.callFacade<ListWalletDescriptorsResult>(
+      'listWalletDescriptors',
+      toGoListWalletDescriptorsReq(req),
     );
   }
 

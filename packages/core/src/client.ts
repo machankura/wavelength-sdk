@@ -6,12 +6,14 @@ import type { ActivityStreamOptions } from './activity-options.ts';
 import type {
   CreateWalletRequest,
   DepositRequest,
+  DescriptorWalletRequest,
   ExternalSeedWalletRequest,
   ExitRequest,
   ExitStatusRequest,
   ExitSummaryRequest,
   GetExitPlanRequest,
   ListRequest,
+  ListWalletDescriptorsRequest,
   OpenWalletFromPasskeyRequest,
   ReceiveRequest,
   SendRequest,
@@ -22,12 +24,14 @@ import type {
   Balance,
   CreateWalletResult,
   DepositResult,
+  DescriptorWalletOpenResult,
   ExternalSeedWalletOpenResult,
   ExitResult,
   ExitStatusResult,
   ExitSummaryResult,
   GetExitPlanResult,
   ListResult,
+  ListWalletDescriptorsResult,
   OpenWalletFromPasskeyResult,
   PrepareSendResult,
   ReceiveResult,
@@ -155,4 +159,31 @@ export interface ExternalSeedWalletClient extends WavelengthClient {
     config: RuntimeConfig,
     req: ExternalSeedWalletRequest,
   ): Promise<ExternalSeedWalletOpenResult>;
+}
+
+/**
+ * Additive client capability for wallets defined by private output
+ * descriptors instead of a mnemonic. Official web and React Native clients
+ * implement it. Custom clients can keep implementing {@link WavelengthClient}
+ * unless they need descriptor startup or export.
+ */
+export interface DescriptorWalletClient extends WavelengthClient {
+  /**
+   * Atomically starts the daemon at the final configured profile and imports
+   * or unlocks a wallet from private descriptors, which share one master key or
+   * are account-level keys covering every key family. This is a lifecycle
+   * operation: call {@link stop} before selecting another wallet.
+   */
+  startDescriptorWallet(
+    config: RuntimeConfig,
+    req: DescriptorWalletRequest,
+  ): Promise<DescriptorWalletOpenResult>;
+  /**
+   * Returns the open wallet's tr and wpkh descriptors: public by default, or
+   * private when the request resupplies the wallet's mnemonic or root
+   * descriptors. Use it to move a mnemonic wallet into descriptor software.
+   */
+  listWalletDescriptors(
+    req?: ListWalletDescriptorsRequest,
+  ): Promise<ListWalletDescriptorsResult>;
 }

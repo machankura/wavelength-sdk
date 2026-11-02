@@ -27,9 +27,14 @@ import type {
   ExitBatchResult,
   ExitBatchStop,
   ExitInfeasibilityReason,
+  DescriptorWalletClient,
+  DescriptorWalletOpenResult,
+  DescriptorWalletRequest,
   ExternalSeedWalletOpenResult,
   ExternalSeedWalletClient,
   ExternalSeedWalletRequest,
+  ListWalletDescriptorsRequest,
+  ListWalletDescriptorsResult,
   FacadeMethod,
   OnchainHistory,
   OnchainTx,
@@ -70,6 +75,11 @@ void (null as unknown as CreditPreview);
 void (null as unknown as ExternalSeedWalletOpenResult);
 void (null as unknown as ExternalSeedWalletClient);
 void (null as unknown as ExternalSeedWalletRequest);
+void (null as unknown as DescriptorWalletClient);
+void (null as unknown as DescriptorWalletOpenResult);
+void (null as unknown as DescriptorWalletRequest);
+void (null as unknown as ListWalletDescriptorsRequest);
+void (null as unknown as ListWalletDescriptorsResult);
 void (null as unknown as EntryFailureCode);
 void (null as unknown as EntryProgress);
 void (null as unknown as EntryRequest);
@@ -95,3 +105,15 @@ const _externalSeedClientIsLegacy: WavelengthClient =
   null as unknown as ExternalSeedWalletClient;
 void _legacyClientHasNoExternalSeedStart;
 void _externalSeedClientIsLegacy;
+
+// Descriptor startup and export are additive too: the stable client contract
+// must not grow them, so custom clients keep compiling.
+const _legacyClientHasNoDescriptorStart:
+  'startDescriptorWallet' extends keyof WavelengthClient ? false : true = true;
+const _legacyClientHasNoDescriptorExport:
+  'listWalletDescriptors' extends keyof WavelengthClient ? false : true = true;
+const _descriptorClientIsLegacy: WavelengthClient =
+  null as unknown as DescriptorWalletClient;
+void _legacyClientHasNoDescriptorStart;
+void _legacyClientHasNoDescriptorExport;
+void _descriptorClientIsLegacy;
