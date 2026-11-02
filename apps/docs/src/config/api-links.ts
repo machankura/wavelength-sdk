@@ -15,7 +15,7 @@ const pagePaths: Record<ReferencePage, string> = {
 const coreSymbols = [
   'RuntimeConfig', 'Network', 'WavelengthClient', 'ExternalSeedWalletClient',
   'ready', 'start', 'startExternalSeedWallet', 'ExternalSeedWalletRequest',
-  'ExternalSeedWalletOpenResult', 'stop',
+  'ExternalSeedWalletOpenResult', 'DescriptorWalletClient', 'stop',
   'dispose', 'createWalletEngine', 'WalletEngine', 'WalletSnapshot', 'RecoveryState',
   'RestoreWalletRequest', 'createWallet', 'unlockWallet', 'openWalletFromPasskey',
   'getInfo', 'status', 'balance', 'WalletInfo', 'WalletStatus', 'Balance', 'ServerInfo', 'deposit',
@@ -116,6 +116,12 @@ const inlineTypeOwners: Record<string, string> = {
   ExitInfeasibilityReason: 'getExitPlan',
   SweepWalletRequest: 'sweepWallet',
   SweepWalletResult: 'sweepWallet',
+  startDescriptorWallet: 'DescriptorWalletClient',
+  DescriptorWalletRequest: 'DescriptorWalletClient',
+  DescriptorWalletOpenResult: 'DescriptorWalletClient',
+  listWalletDescriptors: 'DescriptorWalletClient',
+  ListWalletDescriptorsRequest: 'DescriptorWalletClient',
+  ListWalletDescriptorsResult: 'DescriptorWalletClient',
 };
 
 for (const [symbol, owner] of Object.entries(inlineTypeOwners)) {

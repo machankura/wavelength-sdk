@@ -36,7 +36,7 @@
       "name": "Create",
       "slug": "create",
       "service": "WalletService",
-      "comment": "Create initializes a new wallet from a freshly generated aezeed\nmnemonic. The daemon generates the seed, encrypts it with the\nsupplied password, and returns the mnemonic so the caller can record\nit. For recovery flows the caller MAY supply an existing mnemonic in\nthe request; in that case the same mnemonic is echoed back. Proxies\nwaverpc.GenSeed + waverpc.InitWallet server-side.",
+      "comment": "Create initializes a new wallet. With no seed material the daemon\ngenerates an aezeed mnemonic, encrypts the wallet with the supplied\npassword, and returns the mnemonic so the caller can record it. For\nrecovery flows the caller MAY supply an existing mnemonic, which is\nechoed back, or private output descriptors, in which case no\nmnemonic is returned. Proxies waverpc.GenSeed + waverpc.InitWallet\nserver-side.",
       "requestType": "CreateRequest",
       "responseType": "CreateResponse",
       "requestStream": false,
@@ -422,6 +422,22 @@
           "optional": false,
           "oneof": null,
           "comment": "recovery_window is the number of key indexes to scan per recovery key\nfamily. Zero uses the daemon wallet.recoverywindow config value."
+        },
+        {
+          "name": "descriptors",
+          "type": "string",
+          "repeated": true,
+          "optional": false,
+          "oneof": null,
+          "comment": "descriptors are private output descriptors that all share one BIP32\nmaster key. When set, the wallet is built from that master key\ninstead of a mnemonic, and the response carries no mnemonic.\nMutually exclusive with mnemonic and seed_passphrase. See\nwaverpc.InitWalletRequest.descriptors for the accepted forms."
+        },
+        {
+          "name": "birthday_unix",
+          "type": "int64",
+          "repeated": false,
+          "optional": false,
+          "oneof": null,
+          "comment": "birthday_unix is the earliest time, in Unix seconds, at which the\ndescriptor keys may have received funds. Zero scans from genesis.\nOnly used with descriptors."
         }
       ]
     },
@@ -492,6 +508,22 @@
           "optional": false,
           "oneof": null,
           "comment": "recovered_oor_events is the number of OOR recipient events processed\nduring recovery."
+        },
+        {
+          "name": "descriptors",
+          "type": "string",
+          "repeated": true,
+          "optional": false,
+          "oneof": null,
+          "comment": "descriptors are the public output descriptors the new wallet watches,\nwith key origin and checksum. Safe to share with watch-only software."
+        },
+        {
+          "name": "root_fingerprint",
+          "type": "string",
+          "repeated": false,
+          "optional": false,
+          "oneof": null,
+          "comment": "root_fingerprint is the hex-encoded BIP32 fingerprint of the wallet's\nmaster key."
         }
       ]
     },

@@ -293,8 +293,8 @@ package.
 The daemon's ordinary start verb accepts this lower-level shape; the SDK builds
 it from your [`RuntimeConfig`](#RuntimeConfig) when you call
 `client.start(config)`. Lifecycle verbs are not reachable through `callFacade`,
-which rejects `'start'`, `'startExternalSeedWallet'`, and `'stop'` so transport
-lifecycle guards are never bypassed.
+which rejects `'start'`, `'startExternalSeedWallet'`, `'startDescriptorWallet'`,
+and `'stop'` so transport lifecycle guards are never bypassed.
 
 </ApiSymbol>
 
@@ -339,6 +339,29 @@ export const externalSeedWalletClientSig = `interface ExternalSeedWalletClient
   ): Promise<ExternalSeedWalletOpenResult>;
 }`;
 
+export const descriptorWalletClientSig = `interface DescriptorWalletClient
+  extends WavelengthClient {
+  startDescriptorWallet(
+    config: RuntimeConfig,
+    req: DescriptorWalletRequest,
+  ): Promise<DescriptorWalletOpenResult>;
+  listWalletDescriptors(
+    req?: ListWalletDescriptorsRequest,
+  ): Promise<ListWalletDescriptorsResult>;
+}`;
+export const descriptorWalletRequestSig = `type DescriptorWalletRequest = {
+  descriptors: string[];
+  birthday?: Date;
+  expectedIdentityPubKey?: string;
+  recoverState?: boolean;
+  recoveryWindow?: number;
+};`;
+export const listWalletDescriptorsRequestSig = `type ListWalletDescriptorsRequest = {
+  includePrivate?: boolean;
+  mnemonic?: string[];
+  seedPassphrase?: string;
+  descriptors?: string[];
+};`;
 export const readySig = `ready(): Promise<void>`;
 export const startSig = `start(config: RuntimeConfig): Promise<WalletInfo>`;
 export const startExternalSeedWalletSig = `startExternalSeedWallet(
@@ -393,6 +416,53 @@ semantics to the standard client contract. Official web and React Native
 factories return this subtype.
 
 <Signature title="wavelength-core.d.ts" code={externalSeedWalletClientSig} />
+
+</ApiSymbol>
+
+<ApiSymbol name="DescriptorWalletClient" kind="type">
+
+An additive transport capability for wallets defined by private output
+descriptors instead of a mnemonic: either descriptors that share one BIP32
+master key, or account-level private keys covering the on-chain account and
+every key family. It extends
+[`WavelengthClient`](#WavelengthClient) without changing the standard client
+contract. Official web and React Native factories return this subtype.
+
+<Signature title="wavelength-core.d.ts" code={descriptorWalletClientSig} />
+
+`startDescriptorWallet(config, req)` follows the
+[`startExternalSeedWallet()`](#startExternalSeedWallet) contract with
+descriptors in place of entropy: it requires a final nonempty
+`config.dataDir`, imports into an empty profile or unlocks the wallet already
+there, and resolves once wallet services are ready. Master-key descriptors are
+`tr()` under `86h/0h/0h` and `wpkh()` under `84h/0h/0h`, coin type 0' on every
+network and account 0, with branch `0`, `1` or `<0;1>`. Account-level keys are
+`tr([fp/86h/0h/0h]xprv.../<0;1>/*)`, an optional matching `wpkh()`, and either
+`[fp/1017h/COINh]xprv...` or `[fp/1017h/COINh/FAMILYh]xprv.../0/*` for every
+family 0 to 255, where `COIN` is 0 on mainnet and 1 elsewhere. A partial set,
+an `xpub`, or anything else is refused. The opened wallet is always checked
+against the identity the descriptors derive. See
+[restoring from output descriptors](/guides/restore-a-wallet/#restore-from-output-descriptors).
+
+<Signature title="wavelength-core.d.ts" code={descriptorWalletRequestSig} />
+
+<ParamsTable rows={[
+  { name: 'descriptors', type: 'string[]', desc: 'Private descriptors sharing one master key, or account-level private keys covering the on-chain account and every key family. They are as sensitive as a seed; the transport redacts them from opt-in debug logs.' },
+  { name: 'birthday', type: 'Date', desc: 'Optional earliest date the keys may have received funds. It bounds the first rescan; omit it to scan from genesis.' },
+  { name: 'expectedIdentityPubKey', type: 'string', desc: 'Optional identity observed on an earlier open, checked before the daemon starts.' },
+  { name: 'recoverState', type: 'boolean', desc: 'Optional per-start request to scan for wallet state.' },
+  { name: 'recoveryWindow', type: 'number', desc: 'Optional per-key-family recovery look-ahead that must fit in uint32.' },
+]} />
+
+`listWalletDescriptors(req)` returns the open wallet's `tr` and `wpkh`
+descriptors. By default they are public account-level descriptors, safe to
+import into watch-only software. With `includePrivate` the request must also
+carry the wallet's `mnemonic` (and `seedPassphrase`, if one was used) or its
+private root `descriptors`; the daemon checks them against the open wallet
+before rendering anything private. Use it to move a mnemonic wallet into
+descriptor-based software.
+
+<Signature title="wavelength-core.d.ts" code={listWalletDescriptorsRequestSig} />
 
 </ApiSymbol>
 
@@ -2573,9 +2643,10 @@ exit and sweep flow end to end.
 ## Portable facade calls
 
 export const facadeMethodSig = `type FacadeMethod =
-  | 'start' | 'startExternalSeedWallet' | 'stop'
+  | 'start' | 'startExternalSeedWallet' | 'startDescriptorWallet' | 'stop'
   | 'getInfo' | 'status' | 'balance'
   | 'createWallet' | 'unlockWallet' | 'openWalletFromPasskey'
+  | 'listWalletDescriptors'
   | 'deposit' | 'receive' | 'prepareSend' | 'sendPrepared'
   | 'list' | 'exit' | 'exitStatus' | 'exitSummary'
   | 'getExitPlan' | 'sweepWallet'

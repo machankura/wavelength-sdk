@@ -28,6 +28,17 @@ test('resolves external-seed lifecycle symbols to their core anchors', () => {
   });
 });
 
+test('resolves descriptor symbols to their client anchor', () => {
+  assert.deepEqual(resolveApiLink('DescriptorWalletClient'), {
+    href: '/reference/wavelength-core/#DescriptorWalletClient',
+    symbol: 'DescriptorWalletClient',
+  });
+  assert.deepEqual(resolveApiLink('listWalletDescriptors'), {
+    href: '/reference/wavelength-core/#DescriptorWalletClient',
+    symbol: 'listWalletDescriptors',
+  });
+});
+
 test('resolves a transport symbol to its package reference page', () => {
   assert.deepEqual(resolveApiLink('createNativeWalletEngine'), {
     href: '/reference/wavelength-react-native/#createNativeWalletEngine',
