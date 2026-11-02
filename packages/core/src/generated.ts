@@ -13,6 +13,44 @@ export interface Client {
 }
 
 //////////
+// source: descriptor.go
+
+/**
+ * DescriptorWalletRequest opens the wallet at an explicit daemon data
+ * directory from private output descriptors that share one BIP32 master key.
+ * The accepted forms are those of walletdesc.Parse: tr() under 86h/0h/0h and
+ * wpkh() under 84h/0h/0h, with branch 0, 1 or <0;1>.
+ * Birthday bounds the first rescan of a new import; zero scans from genesis.
+ * ExpectedIdentityPubKey optionally binds the directory to a previously
+ * persisted identity. The identity derived from the descriptors is always
+ * checked against the opened wallet, pinned or not. RecoverState reruns the
+ * idempotent recovery scan on this open, as for external-seed wallets.
+ */
+export interface DescriptorWalletRequest {
+  descriptors: string[];
+  birthday: string;
+  expectedIdentityPubKey: string;
+  recoverState: boolean;
+  recoveryWindow: number /* uint32 */;
+}
+/**
+ * DescriptorWalletOpenResult reports a descriptor wallet import or unlock,
+ * the public descriptors it watches, and the optional state-recovery scan.
+ */
+export interface DescriptorWalletOpenResult {
+  imported: boolean;
+  identityPubKey: string;
+  rootFingerprint: string;
+  descriptors: string[];
+  recoveryRan: boolean;
+  recoveredBoardingAddresses: number /* uint32 */;
+  recoveredBoardingUTXOs: number /* uint32 */;
+  recoveredVTXOs: number /* uint32 */;
+  recoveredOORReceiveScripts: number /* uint32 */;
+  recoveredOORRecipientEvents: number /* uint32 */;
+}
+
+//////////
 // source: embedded.go
 
 /**
@@ -345,7 +383,12 @@ export interface ServerInfo {
   freeRefreshWindowBlocks: number /* uint32 */;
 }
 /**
- * CreateWalletRequest creates or imports a daemon wallet.
+ * CreateWalletRequest creates or imports a daemon wallet. Set Mnemonic to
+ * import an aezeed mnemonic, or Descriptors to import private output
+ * descriptors that share one BIP32 master key; leave both empty to generate
+ * a fresh mnemonic. Birthday bounds the first rescan of a descriptor import
+ * (zero scans from genesis) and is ignored for mnemonics, which carry their
+ * own.
  */
 export interface CreateWalletRequest {
   mnemonic: string[];
@@ -353,21 +396,48 @@ export interface CreateWalletRequest {
   walletPassword: string /* []byte */;
   recoverState: boolean;
   recoveryWindow: number /* uint32 */;
+  descriptors: string[];
+  birthday: string;
 }
 /**
- * CreateWalletResult returns the seed words, daemon identity, and optional
- * recovery counters.
+ * CreateWalletResult returns the seed words, daemon identity, the public
+ * descriptors the wallet watches, and optional recovery counters. Mnemonic
+ * and EncipheredSeed are empty for a descriptor import.
  */
 export interface CreateWalletResult {
   mnemonic: string[];
   encipheredSeed: string /* []byte */;
   identityPubKey: string;
+  rootFingerprint: string;
+  descriptors: string[];
   recoveryRan: boolean;
   recoveredBoardingAddresses: number /* uint32 */;
   recoveredBoardingUTXOs: number /* uint32 */;
   recoveredVTXOs: number /* uint32 */;
   recoveredOORReceiveScripts: number /* uint32 */;
   recoveredOORRecipientEvents: number /* uint32 */;
+}
+/**
+ * ListWalletDescriptorsRequest selects public or private descriptor export.
+ * IncludePrivate requires the wallet's Mnemonic (with SeedPassphrase when
+ * one was used) or its private root Descriptors, which the daemon checks
+ * against the open wallet before rendering private descriptors.
+ */
+export interface ListWalletDescriptorsRequest {
+  includePrivate: boolean;
+  mnemonic: string[];
+  seedPassphrase: string /* []byte */;
+  descriptors: string[];
+}
+/**
+ * ListWalletDescriptorsResult carries the wallet's tr and wpkh descriptors.
+ * RootFingerprint is empty for a wallet whose fingerprint was never
+ * recorded; its public descriptors then carry no key origin.
+ */
+export interface ListWalletDescriptorsResult {
+  rootFingerprint: string;
+  descriptors: string[];
+  includesPrivate: boolean;
 }
 /**
  * UnlockWalletRequest unlocks an existing embedded daemon wallet.
