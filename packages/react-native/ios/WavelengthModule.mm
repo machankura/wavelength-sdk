@@ -108,6 +108,8 @@ RCT_EXPORT_MODULE(Wavelength)
       MobileStart(paramsJson, &error);
     } else if ([method isEqualToString:@"startExternalSeedWallet"]) {
       result = MobileStartExternalSeedWallet(params, &error);
+    } else if ([method isEqualToString:@"startDescriptorWallet"]) {
+      result = MobileStartDescriptorWallet(params, &error);
     } else if ([method isEqualToString:@"stop"]) {
       MobileStop(&error);
     } else if ([method isEqualToString:@"getInfo"]) {
@@ -120,6 +122,8 @@ RCT_EXPORT_MODULE(Wavelength)
       result = MobileCreateWallet(params, &error);
     } else if ([method isEqualToString:@"unlockWallet"]) {
       result = MobileUnlockWallet(params, &error);
+    } else if ([method isEqualToString:@"listWalletDescriptors"]) {
+      result = MobileListWalletDescriptors(params, &error);
     } else if ([method isEqualToString:@"openWalletFromPasskey"]) {
       result = MobileOpenWalletFromPasskey(params, &error);
     } else if ([method isEqualToString:@"deposit"]) {

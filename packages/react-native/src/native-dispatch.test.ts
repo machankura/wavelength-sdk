@@ -15,12 +15,20 @@ const nativeMethods = {
     'Mobile.startExternalSeedWallet',
     'MobileStartExternalSeedWallet',
   ],
+  startDescriptorWallet: [
+    'Mobile.startDescriptorWallet',
+    'MobileStartDescriptorWallet',
+  ],
   stop: ['Mobile.stop', 'MobileStop'],
   getInfo: ['Mobile.getInfo', 'MobileGetInfo'],
   status: ['Mobile.status', 'MobileStatus'],
   balance: ['Mobile.balance', 'MobileBalance'],
   createWallet: ['Mobile.createWallet', 'MobileCreateWallet'],
   unlockWallet: ['Mobile.unlockWallet', 'MobileUnlockWallet'],
+  listWalletDescriptors: [
+    'Mobile.listWalletDescriptors',
+    'MobileListWalletDescriptors',
+  ],
   openWalletFromPasskey: [
     'Mobile.openWalletFromPasskey',
     'MobileOpenWalletFromPasskey',
@@ -110,6 +118,19 @@ describe('native facade dispatch', () => {
     assert.match(
       mm,
       /\[method isEqualToString:@"startExternalSeedWallet"\]\)\s*\{\s*result = MobileStartExternalSeedWallet\(params, &error\);/,
+    );
+  });
+
+  it('forwards descriptor starts as byte request and result values', async () => {
+    const { kt, mm } = await readNativeSources();
+
+    assert.match(
+      kt,
+      /"startDescriptorWallet"\s*->\s*Mobile\.startDescriptorWallet\(params\)\.toString\(Charsets\.UTF_8\)/,
+    );
+    assert.match(
+      mm,
+      /\[method isEqualToString:@"startDescriptorWallet"\]\)\s*\{\s*result = MobileStartDescriptorWallet\(params, &error\);/,
     );
   });
 

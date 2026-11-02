@@ -159,12 +159,15 @@ class WavelengthModule(reactContext: ReactApplicationContext) :
       "start" -> { Mobile.start(paramsJson); "" }
       "startExternalSeedWallet" ->
         Mobile.startExternalSeedWallet(params).toString(Charsets.UTF_8)
+      "startDescriptorWallet" ->
+        Mobile.startDescriptorWallet(params).toString(Charsets.UTF_8)
       "stop" -> { Mobile.stop(); "" }
       "getInfo" -> Mobile.getInfo().toString(Charsets.UTF_8)
       "status" -> Mobile.status().toString(Charsets.UTF_8)
       "balance" -> Mobile.balance().toString(Charsets.UTF_8)
       "createWallet" -> Mobile.createWallet(params).toString(Charsets.UTF_8)
       "unlockWallet" -> Mobile.unlockWallet(params).toString(Charsets.UTF_8)
+      "listWalletDescriptors" -> Mobile.listWalletDescriptors(params).toString(Charsets.UTF_8)
       "openWalletFromPasskey" -> Mobile.openWalletFromPasskey(params).toString(Charsets.UTF_8)
       "deposit" -> Mobile.deposit(params).toString(Charsets.UTF_8)
       "receive" -> Mobile.receive(params).toString(Charsets.UTF_8)
