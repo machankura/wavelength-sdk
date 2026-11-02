@@ -1,11 +1,14 @@
 import {
   BaseWavelengthClient,
   WavelengthError,
+  validateDescriptorWalletRequest,
   validateExternalSeedWalletRequest,
   validateRuntimeConfig,
 } from '@lightninglabs/wavelength-core';
 import type {
   ActivityStreamOptions,
+  DescriptorWalletOpenResult,
+  DescriptorWalletRequest,
   ExternalSeedWalletOpenResult,
   ExternalSeedWalletRequest,
   FacadeMethod,
@@ -126,6 +129,15 @@ export class MainThreadWavelengthClient extends BaseWavelengthClient {
     );
   }
 
+  startDescriptorWallet(
+    config: RuntimeConfig,
+    req: DescriptorWalletRequest,
+  ): Promise<DescriptorWalletOpenResult> {
+    return this.enqueueLifecycle(() =>
+      this.startDescriptorWalletLocked(config, req),
+    );
+  }
+
   stop(): Promise<void> {
     return this.enqueueLifecycle(() =>
       // A stop after the runtime has exited has nothing to stop: bootExit
@@ -163,6 +175,22 @@ export class MainThreadWavelengthClient extends BaseWavelengthClient {
       config,
       RUNTIME_LOCK_NAME,
       () => super.startExternalSeedWallet(config, req),
+    );
+  }
+
+  private startDescriptorWalletLocked(
+    config: RuntimeConfig,
+    req: DescriptorWalletRequest,
+  ): Promise<DescriptorWalletOpenResult> {
+    validateDescriptorWalletRequest(req);
+    if (typeof config.dataDir !== 'string' || config.dataDir.trim() === '') {
+      return super.startDescriptorWallet(config, req);
+    }
+
+    return this.startWithRuntimeLock(
+      config,
+      RUNTIME_LOCK_NAME,
+      () => super.startDescriptorWallet(config, req),
     );
   }
 

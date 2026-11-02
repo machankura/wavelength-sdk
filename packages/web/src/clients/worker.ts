@@ -3,8 +3,11 @@ import {
   RUNTIME_MANIFEST_VERSION,
   WavelengthError,
   WavelengthEventType,
+  validateDescriptorWalletRequest,
   validateExternalSeedWalletRequest,
   validateRuntimeConfig,
+  type DescriptorWalletOpenResult,
+  type DescriptorWalletRequest,
   type ExternalSeedWalletOpenResult,
   type ExternalSeedWalletRequest,
   type WavelengthPerformanceEvent,
@@ -249,6 +252,15 @@ export class WorkerWavelengthClient extends BaseWavelengthClient {
     );
   }
 
+  startDescriptorWallet(
+    config: RuntimeConfig,
+    req: DescriptorWalletRequest,
+  ): Promise<DescriptorWalletOpenResult> {
+    return this.enqueueLifecycle(() =>
+      this.startDescriptorWalletLocked(config, req),
+    );
+  }
+
   stop(): Promise<void> {
     return this.enqueueLifecycle(() =>
       // A stop that ran behind a start which then died (or any path that
@@ -284,6 +296,25 @@ export class WorkerWavelengthClient extends BaseWavelengthClient {
       config,
       externalSeedRuntimeLockName(config.dataDir, config.network),
       () => super.startExternalSeedWallet(config, req),
+    );
+  }
+
+  // Descriptor startup selects its wallet by the final profile exactly like
+  // external-seed startup, so it takes the same profile lock: both lifecycles
+  // open the same network-scoped stores below dataDir.
+  private startDescriptorWalletLocked(
+    config: RuntimeConfig,
+    req: DescriptorWalletRequest,
+  ): Promise<DescriptorWalletOpenResult> {
+    validateDescriptorWalletRequest(req);
+    if (typeof config.dataDir !== 'string' || config.dataDir.trim() === '') {
+      return super.startDescriptorWallet(config, req);
+    }
+
+    return this.startWithRuntimeLock(
+      config,
+      externalSeedRuntimeLockName(config.dataDir, config.network),
+      () => super.startDescriptorWallet(config, req),
     );
   }
 

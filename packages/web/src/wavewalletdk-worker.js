@@ -44,6 +44,7 @@ const SECRET_FIELDS = new Set([
   "encipheredseed",
   "seedentropy",
   "prfoutput",
+  "descriptors",
 ]);
 const REDACTED = "[REDACTED]";
 

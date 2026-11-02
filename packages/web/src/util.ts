@@ -45,6 +45,7 @@ const SECRET_FIELDS: ReadonlySet<string> = new Set([
   'encipheredseed',
   'seedentropy',
   'prfoutput',
+  'descriptors',
 ]);
 
 const REDACTED = '[REDACTED]';

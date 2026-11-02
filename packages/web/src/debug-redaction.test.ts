@@ -11,6 +11,7 @@ const MNEMONIC = ['abandon', 'ability', 'able', 'about'];
 const ENCIPHERED_SEED = 'AGVuY2lwaGVyZWQgc2VlZA==';
 const PRF_OUTPUT = 'ab'.repeat(32);
 const SEED_ENTROPY = 'AAECAwQFBgcICQoLDA0ODw==';
+const PRIVATE_DESCRIPTOR = 'tr(tprv8ZgxMBicQKsPdSecretRoot/86h/0h/0h/<0;1>/*)';
 
 type Case = {
   method: string;
@@ -87,6 +88,35 @@ const CASES: Case[] = [
     redactedResult: { Imported: true, IdentityPubKey: '02aa', RecoveryRan: false },
   },
   {
+    method: 'startDescriptorWallet',
+    params: {
+      config: { data_dir: '/wallets', network: 'regtest' },
+      descriptors: [PRIVATE_DESCRIPTOR],
+      birthday_unix: 1767225600,
+    },
+    result: {
+      Imported: true,
+      IdentityPubKey: '02aa',
+      Descriptors: ['tr([d34db33f/86h/0h/0h]tpub/<0;1>/*)'],
+    },
+    redactedParams: {
+      config: { data_dir: '/wallets', network: 'regtest' },
+      descriptors: R,
+      birthday_unix: 1767225600,
+    },
+    redactedResult: { Imported: true, IdentityPubKey: '02aa', Descriptors: R },
+  },
+  {
+    method: 'listWalletDescriptors',
+    params: {
+      IncludePrivate: true,
+      Descriptors: [PRIVATE_DESCRIPTOR],
+    },
+    result: { Descriptors: [PRIVATE_DESCRIPTOR], IncludesPrivate: true },
+    redactedParams: { IncludePrivate: true, Descriptors: R },
+    redactedResult: { Descriptors: R, IncludesPrivate: true },
+  },
+  {
     method: 'list',
     params: { Limit: 2 },
     result: { Activity: { Entries: [{ Id: 'a', AmountSat: 5 }] } },
@@ -96,6 +126,7 @@ const CASES: Case[] = [
 ];
 
 const SECRETS = [
+  PRIVATE_DESCRIPTOR,
   PASSWORD_B64,
   PASSPHRASE_B64,
   ENCIPHERED_SEED,
