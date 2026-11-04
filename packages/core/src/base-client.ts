@@ -19,6 +19,8 @@ import type {
 import {
   validateDescriptorWalletRequest,
   validateExternalSeedWalletRequest,
+  isWatchOnlyCreateRequest,
+  validateWatchOnlyCreateRequest,
   validateWatchOnlyWalletRequest,
 } from './requests.ts';
 import type {
@@ -330,7 +332,18 @@ export abstract class BaseWavelengthClient
     return this.callFacade<Balance>('balance');
   }
 
-  createWallet(req: CreateWalletRequest): Promise<CreateWalletResult> {
+  async createWallet(req: CreateWalletRequest): Promise<CreateWalletResult> {
+    if (isWatchOnlyCreateRequest(req)) {
+      if (this.serverTransport === 'rest') {
+        throw new WavelengthError(
+          'a watch-only wallet is unavailable on the web transport: a browser ' +
+            'runtime cannot dial a remote signer',
+          'invalid_config',
+        );
+      }
+      validateWatchOnlyCreateRequest(req);
+    }
+
     return this.callFacade<CreateWalletResult>(
       'createWallet',
       toGoCreateWalletReq(req),

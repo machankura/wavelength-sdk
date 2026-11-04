@@ -44,6 +44,22 @@ export type CreateWalletRequest = {
    * mnemonics, which carry their own birthday.
    */
   birthday?: Date;
+  /**
+   * Creates a watch-only wallet from a remote signer's export, from `wavesigner
+   * export-watchonly`, instead of a mnemonic or descriptors. The daemon must have
+   * been started with the `remoteSigner*` settings, so this is unavailable on the
+   * web transport. A minimal bundle holds private authentication keys.
+   */
+  watchOnlyBundle?: string;
+  /**
+   * The JSON manifest of a signer with per-slot key overrides, used instead of
+   * `watchOnlyBundle`. It requires `authKeys`.
+   */
+  watchOnlyManifest?: string;
+  /** The authentication private keys that go with `watchOnlyManifest`. */
+  authKeys?: string;
+  /** Allows a `watchOnlyManifest` that replaces the identity family's key. */
+  overrideIdentity?: boolean;
 };
 
 /**
@@ -144,37 +160,95 @@ export function validateDescriptorWalletRequest(
 export function validateWatchOnlyWalletRequest(
   req: WatchOnlyWalletRequest,
 ): void {
+  validateWatchOnlyKeys(req, 'walletPassword', req.walletPassword, {
+    bundle: 'bundle',
+    manifest: 'manifest',
+  });
+  validateImportOptions(req, 'invalid_watch_only');
+}
+
+/** Reports whether a create request asks for a watch-only wallet. */
+export function isWatchOnlyCreateRequest(req: CreateWalletRequest): boolean {
+  return (
+    req.watchOnlyBundle !== undefined ||
+    req.watchOnlyManifest !== undefined ||
+    req.authKeys !== undefined ||
+    req.overrideIdentity !== undefined
+  );
+}
+
+/** Validates a create request that asks for a watch-only wallet. */
+export function validateWatchOnlyCreateRequest(
+  req: CreateWalletRequest,
+): void {
+  if (req.mnemonic?.length || req.seedPassphrase || req.descriptors?.length) {
+    throw new WavelengthError(
+      'a watch-only wallet cannot also have a mnemonic, seedPassphrase or ' +
+        'descriptors',
+      'invalid_watch_only',
+    );
+  }
+  validateWatchOnlyKeys(
+    {
+      bundle: req.watchOnlyBundle,
+      manifest: req.watchOnlyManifest,
+      authKeys: req.authKeys,
+      overrideIdentity: req.overrideIdentity,
+    },
+    'password',
+    req.password,
+    { bundle: 'watchOnlyBundle', manifest: 'watchOnlyManifest' },
+  );
+  validateImportOptions(req, 'invalid_watch_only');
+}
+
+// The rules for a watch-only wallet's key material, whichever request carries
+// it. names is how that request spells the two sources, for its error messages.
+function validateWatchOnlyKeys(
+  keys: {
+    bundle?: string;
+    manifest?: string;
+    authKeys?: string;
+    overrideIdentity?: boolean;
+  },
+  passwordName: string,
+  password: string,
+  names: { bundle: string; manifest: string },
+): void {
   const invalid = (message: string) =>
     new WavelengthError(message, 'invalid_watch_only');
 
-  if (typeof req.walletPassword !== 'string' || req.walletPassword === '') {
-    throw invalid('walletPassword must be a nonempty string');
+  if (typeof password !== 'string' || password === '') {
+    throw invalid(`${passwordName} must be a nonempty string`);
   }
-  for (const field of ['bundle', 'manifest', 'authKeys'] as const) {
-    const value = req[field];
+  for (const [field, name] of [
+    ['bundle', names.bundle],
+    ['manifest', names.manifest],
+    ['authKeys', 'authKeys'],
+  ] as const) {
+    const value = keys[field];
     if (value !== undefined && (typeof value !== 'string' || value === '')) {
-      throw invalid(`${field} must be a nonempty string`);
+      throw invalid(`${name} must be a nonempty string`);
     }
   }
-  if ((req.bundle === undefined) === (req.manifest === undefined)) {
-    throw invalid('exactly one of bundle and manifest is required');
+  if ((keys.bundle === undefined) === (keys.manifest === undefined)) {
+    throw invalid(`exactly one of ${names.bundle} and ${names.manifest} is required`);
   }
-  if (req.manifest !== undefined && req.authKeys === undefined) {
+  if (keys.manifest !== undefined && keys.authKeys === undefined) {
     throw invalid('a manifest requires its authKeys');
   }
   if (
-    req.overrideIdentity !== undefined &&
-    typeof req.overrideIdentity !== 'boolean'
+    keys.overrideIdentity !== undefined &&
+    typeof keys.overrideIdentity !== 'boolean'
   ) {
     throw invalid('overrideIdentity must be a boolean');
   }
   if (
-    req.bundle !== undefined &&
-    (req.authKeys !== undefined || req.overrideIdentity !== undefined)
+    keys.bundle !== undefined &&
+    (keys.authKeys !== undefined || keys.overrideIdentity !== undefined)
   ) {
     throw invalid('authKeys and overrideIdentity apply only to a manifest');
   }
-  validateImportOptions(req, 'invalid_watch_only');
 }
 
 // The options a wallet opened from imported keys shares across lifecycles.

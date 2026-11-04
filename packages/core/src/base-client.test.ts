@@ -4,7 +4,7 @@ import { BaseWavelengthClient } from './base-client.ts';
 import type { WavelengthEvent } from './events.ts';
 import { FACADE_METHODS, type FacadeMethod } from './facade.ts';
 import { WavelengthError } from './errors.ts';
-import { FORCE_UNROLL_ACK } from './requests.ts';
+import { FORCE_UNROLL_ACK, type CreateWalletRequest } from './requests.ts';
 import type { ActivityStreamOptions } from './activity-options.ts';
 
 // A fake transport that records every raw facade invocation and replays canned
@@ -493,6 +493,86 @@ describe('BaseWavelengthClient', () => {
     assert.deepEqual(params.Descriptors, ['tr(tprv/86h/0h/0h/<0;1>/*)']);
     assert.equal(params.Birthday, '2026-01-01T00:00:00.000Z');
     assert.equal(params.Mnemonic, undefined);
+  });
+
+  it('createWallet base64-encodes the watch-only inputs', async () => {
+    const client = new FakeClient();
+    await client.createWallet({
+      password: 'hunter2',
+      watchOnlyManifest: '{"version":1}',
+      authKeys: 'keys',
+      overrideIdentity: true,
+      birthday: new Date('2026-01-01T00:00:00Z'),
+    });
+    assert.deepEqual(client.calls[0], {
+      method: 'createWallet',
+      params: {
+        WalletPassword: 'aHVudGVyMg==',
+        Mnemonic: undefined,
+        SeedPassphrase: undefined,
+        RecoverState: undefined,
+        RecoveryWindow: undefined,
+        Descriptors: undefined,
+        Birthday: '2026-01-01T00:00:00.000Z',
+        WatchOnlyBundle: undefined,
+        WatchOnlyManifest: 'eyJ2ZXJzaW9uIjoxfQ==',
+        AuthKeys: 'a2V5cw==',
+        OverrideIdentity: true,
+      },
+    });
+
+    const bundleClient = new FakeClient();
+    await bundleClient.createWallet({
+      password: 'hunter2',
+      watchOnlyBundle: 'bundle',
+    });
+    const params = bundleClient.calls[0]?.params as Record<string, unknown>;
+    assert.equal(params.WatchOnlyBundle, 'YnVuZGxl');
+    assert.equal(params.AuthKeys, undefined);
+  });
+
+  it('createWallet refuses bad watch-only requests before dispatch', async () => {
+    const client = new FakeClient();
+    const bad: Array<[CreateWalletRequest, RegExp]> = [
+      [{ password: 'p', authKeys: 'k' }, /exactly one of watchOnlyBundle and watchOnlyManifest/],
+      [{ password: 'p', overrideIdentity: true }, /exactly one of/],
+      [
+        { password: 'p', watchOnlyBundle: 'b', watchOnlyManifest: 'm', authKeys: 'k' },
+        /exactly one of/,
+      ],
+      [{ password: 'p', watchOnlyManifest: 'm' }, /requires its authKeys/],
+      [{ password: 'p', watchOnlyBundle: '' }, /watchOnlyBundle must be a nonempty/],
+      [{ password: 'p', watchOnlyBundle: 'b', authKeys: 'k' }, /apply only to a manifest/],
+      [{ password: '', watchOnlyBundle: 'b' }, /password must be a nonempty/],
+      [{ password: 'p', watchOnlyBundle: 'b', mnemonic: ['w'] }, /cannot also have/],
+      [{ password: 'p', watchOnlyBundle: 'b', seedPassphrase: 's' }, /cannot also have/],
+      [{ password: 'p', watchOnlyBundle: 'b', descriptors: ['d'] }, /cannot also have/],
+      [{ password: 'p', watchOnlyBundle: 'b', birthday: new Date(NaN) }, /birthday/],
+    ];
+    for (const [req, message] of bad) {
+      await assert.rejects(
+        client.createWallet(req),
+        (err: unknown) =>
+          err instanceof WavelengthError &&
+          err.code === 'invalid_watch_only' &&
+          message.test(err.message),
+        message.source,
+      );
+    }
+    assert.equal(client.calls.length, 0);
+  });
+
+  it('createWallet refuses a watch-only wallet on the web transport', async () => {
+    class RestClient extends FakeClient {
+      protected override readonly serverTransport = 'rest' as never;
+    }
+    const client = new RestClient();
+    await assert.rejects(
+      client.createWallet({ password: 'p', watchOnlyBundle: 'b' }),
+      (err: WavelengthError) =>
+        err.code === 'invalid_config' && err.message.includes('web transport'),
+    );
+    assert.equal(client.calls.length, 0);
   });
 
   it('createWallet sends the Go-shaped request with a base64 password', async () => {

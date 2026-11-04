@@ -351,6 +351,18 @@ export function toGoCreateWalletReq(req: CreateWalletRequest) {
     Descriptors: req.descriptors,
     // Go's time.Time decodes RFC 3339 text.
     Birthday: req.birthday?.toISOString(),
+    // The watch-only inputs are []byte fields in Go, so they travel as base64.
+    WatchOnlyBundle:
+      req.watchOnlyBundle !== undefined
+        ? base64FromUtf8(req.watchOnlyBundle)
+        : undefined,
+    WatchOnlyManifest:
+      req.watchOnlyManifest !== undefined
+        ? base64FromUtf8(req.watchOnlyManifest)
+        : undefined,
+    AuthKeys:
+      req.authKeys !== undefined ? base64FromUtf8(req.authKeys) : undefined,
+    OverrideIdentity: req.overrideIdentity,
   };
 }
 
