@@ -228,6 +228,99 @@ describe('engine lifecycle', () => {
     engine.dispose();
   });
 
+  it('restart() stops, then starts with the config the last start() used', async () => {
+    const client = new FakeWavelengthClient();
+    client.info = readyInfo;
+    const engine = createWalletEngine({
+      client,
+      config: { network: 'signet', arkServerAddress: 'default:7070' },
+    });
+    client.resolveReady();
+    await flush();
+    const opened = { network: 'regtest', arkServerAddress: 'opened:7070' } as const;
+    await engine.start(opened);
+    await flush();
+    client.calls.length = 0;
+    client.info = { walletState: 'locked', walletReady: false } as WalletInfo;
+
+    await engine.restart();
+
+    const lifecycle = client.calls.filter(
+      (call) => call.method === 'stop' || call.method === 'start',
+    );
+    assert.deepEqual(lifecycle, [
+      { method: 'stop', args: [] },
+      { method: 'start', args: [opened] },
+    ]);
+    assert.equal(engine.getSnapshot().phase, 'locked');
+    engine.dispose();
+  });
+
+  it("restart() falls back to the engine's config and rejects without one", async () => {
+    const config = { network: 'regtest', arkServerAddress: 'h:7070' } as const;
+    const client = new FakeWavelengthClient();
+    const engine = createWalletEngine({ client, config });
+    client.resolveReady();
+    await flush();
+    await engine.restart();
+    assert.deepEqual(
+      client.calls.find((call) => call.method === 'start')?.args,
+      [config],
+    );
+    engine.dispose();
+
+    const bare = new FakeWavelengthClient();
+    const bareEngine = createWalletEngine({ client: bare });
+    bare.resolveReady();
+    await flush();
+    await assert.rejects(bareEngine.restart(), /needs a runtime config/);
+    assert.equal(bare.calls.some((call) => call.method === 'stop'), false);
+    bareEngine.dispose();
+  });
+
+  it('a stop() the host issues during restart() keeps the wallet stopped', async () => {
+    const client = new FakeWavelengthClient();
+    client.info = readyInfo;
+    const engine = createWalletEngine({ client });
+    client.resolveReady();
+    await flush();
+    await engine.start({ network: 'regtest', arkServerAddress: 'h:7070' });
+    await flush();
+    client.calls.length = 0;
+
+    let finishStop!: () => void;
+    const stopHeld = new Promise<void>((resolve) => {
+      finishStop = resolve;
+    });
+    client.impl('stop', () => stopHeld);
+    const restarting = engine.restart();
+    const hostStop = engine.stop();
+    finishStop();
+    await Promise.all([restarting, hostStop]);
+    await flush();
+
+    assert.equal(engine.getSnapshot().phase, 'stopped');
+    assert.equal(client.calls.some((call) => call.method === 'start'), false);
+    engine.dispose();
+  });
+
+  it('a start that fails during restart() lands on error and rejects', async () => {
+    const client = new FakeWavelengthClient();
+    client.info = readyInfo;
+    const engine = createWalletEngine({ client });
+    client.resolveReady();
+    await flush();
+    await engine.start({ network: 'regtest', arkServerAddress: 'h:7070' });
+    await flush();
+
+    client.impl('start', () => Promise.reject(new Error('no route to host')));
+    await assert.rejects(engine.restart(), /no route to host/);
+
+    assert.equal(engine.getSnapshot().phase, 'error');
+    assert.equal(engine.getSnapshot().error?.message, 'no route to host');
+    engine.dispose();
+  });
+
   it('a refresh resolving after stop does not repopulate the snapshot', async () => {
     const client = new FakeWavelengthClient();
     client.info = readyInfo;

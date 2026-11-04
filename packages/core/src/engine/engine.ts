@@ -138,6 +138,16 @@ export interface WalletEngine {
   start(config?: RuntimeConfig): Promise<WalletInfo>;
   /** Stops the runtime and clears the in-memory snapshot (info, balance, activity, error); persisted wallet data is untouched. A failure moves the phase to 'error'. */
   stop(): Promise<void>;
+  /**
+   * Stops the runtime and starts it again with the config the last start() used,
+   * falling back to the engine's configured config; throws if neither exists.
+   * The in-memory snapshot is cleared as with stop(), and the engine holds no
+   * credentials, so an existing wallet comes back on 'locked' and the host
+   * unlocks it again. A failure moves the phase to 'error' and rejects. A stop()
+   * the host issues while the restart is stopping takes precedence: no start
+   * follows, and the promise resolves.
+   */
+  restart(): Promise<void>;
   /** Re-fetches info, balance, and activity concurrently. */
   refresh(): Promise<void>;
   /**
@@ -221,6 +231,9 @@ class WavelengthEngine implements WalletEngine {
   readonly client: WavelengthClient;
   readonly #store = new SnapshotStore();
   readonly #config: RuntimeConfig | undefined;
+  // The config the last start() used, kept for restart(): the same data
+  // directory, network and endpoints, plus anything else needed from boot.
+  #lastStartConfig: RuntimeConfig | undefined;
   readonly #onPerformance: WavelengthPerformanceListener | undefined;
   #disposed = false;
   // Counts stops the host asked for, so a start that rejects afterwards can
@@ -363,6 +376,7 @@ class WavelengthEngine implements WalletEngine {
     if (this.getSnapshot().phase === 'stopping') {
       throw new Error('cannot start while the runtime is stopping');
     }
+    this.#lastStartConfig = cfg;
     this.#refreshFailures = 0;
     const stopsBefore = this.#deliberateStops;
     this.#dispatch({ type: 'startRequested' }, { error: null });
@@ -431,6 +445,25 @@ class WavelengthEngine implements WalletEngine {
       this.#dispatch({ type: 'stopFailed' }, { error });
       throw error;
     }
+  }
+
+  async restart(): Promise<void> {
+    this.#assertNotDisposed();
+    const cfg = this.#lastStartConfig ?? this.#config;
+    if (!cfg) {
+      throw new Error(
+        'restart() needs a runtime config: call start() first, or set config on the engine factory',
+      );
+    }
+    const stopped = this.stop();
+    // stop() counted itself before its first await, so any further count from
+    // here on is a stop the host asked for, which must not be undone below.
+    const stopsAfterOurs = this.#deliberateStops;
+    await stopped;
+    if (this.#disposed || this.#deliberateStops !== stopsAfterOurs) {
+      return;
+    }
+    await this.start(cfg);
   }
 
   async refresh(): Promise<void> {
