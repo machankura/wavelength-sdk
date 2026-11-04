@@ -5,7 +5,10 @@ import {
   type NativeActivityEvent,
   type WavelengthNativeModule,
 } from './client.ts';
-import type { WavelengthEvent } from '@lightninglabs/wavelength-core';
+import {
+  WavelengthError,
+  type WavelengthEvent,
+} from '@lightninglabs/wavelength-core';
 
 const FINAL_PROFILE_DATA_DIR = '/data/wavelength/wdk/regtest/account-7';
 
@@ -194,6 +197,107 @@ describe('NativeWavelengthClient', () => {
       recoveredVTXOs: 3,
       recoveredOORReceiveScripts: 4,
       recoveredOORRecipientEvents: 5,
+    });
+  });
+
+  describe('overlapping lifecycle calls', () => {
+    // Models the Go facade's startEmbedded and Stop: one start at a time, a
+    // second is refused, and a stop during a start cancels it. A start stays in
+    // flight until the test releases it, as a slow open against a signer would.
+    function makeLifecycleFake() {
+      const order: string[] = [];
+      let status: 'stopped' | 'starting' | 'started' = 'stopped';
+      let generation = 0;
+      const gate: { release?: () => void } = {};
+      const startMethods = new Set([
+        'startExternalSeedWallet',
+        'startDescriptorWallet',
+        'startWatchOnlyWallet',
+      ]);
+      const native: WavelengthNativeModule = {
+        async call(method) {
+          order.push(method);
+          if (method === 'stop') {
+            status = 'stopped';
+            generation += 1;
+            return '';
+          }
+          if (!startMethods.has(method)) {
+            return '{}';
+          }
+          if (status !== 'stopped') {
+            throw new Error('wavewalletdk mobile already started');
+          }
+          status = 'starting';
+          const started = generation;
+          await new Promise<void>((resolve) => {
+            gate.release = resolve;
+          });
+          if (generation !== started) {
+            throw new Error('wavewalletdk mobile start cancelled by Stop');
+          }
+          status = 'started';
+          return JSON.stringify({ Imported: true, Descriptors: [] });
+        },
+        startActivity: () => Promise.resolve(),
+        stopActivity: () => Promise.resolve(),
+        getDefaultDataDir: () => Promise.resolve('/data/wavelength'),
+      };
+      const client = new NativeWavelengthClient(native, () => () => {});
+      return {
+        client,
+        order,
+        status: () => status,
+        release: () => gate.release?.(),
+      };
+    }
+    const config = {
+      network: 'regtest',
+      dataDir: FINAL_PROFILE_DATA_DIR,
+      arkServerAddress: 'h:7070',
+    } as const;
+    const req = { descriptors: ['tr(xprv.../86h/0h/0h/<0;1>/*)'] };
+
+    it('refuses a second start and leaves the first running', async () => {
+      const { client, order, status, release } = makeLifecycleFake();
+      const first = client.startDescriptorWallet(config, req);
+      const second = client.startDescriptorWallet(config, req);
+
+      await assert.rejects(second, (err: unknown) =>
+        err instanceof WavelengthError &&
+        /already started/.test(err.message));
+      assert.equal(status(), 'starting');
+
+      release();
+      const result = await first;
+      assert.equal(result.imported, true);
+      assert.equal(status(), 'started');
+      assert.deepEqual(order, ['startDescriptorWallet', 'startDescriptorWallet']);
+    });
+
+    it('cancels a start when stopped, and can start again', async () => {
+      const { client, order, status, release } = makeLifecycleFake();
+      const first = client.startDescriptorWallet(config, req);
+      await client.stop();
+      assert.equal(status(), 'stopped');
+
+      release();
+      await assert.rejects(first, (err: unknown) =>
+        err instanceof WavelengthError &&
+        /cancelled by Stop/.test(err.message));
+
+      const again = client.startDescriptorWallet(config, req);
+      while (status() !== 'starting') {
+        await new Promise((resolve) => setImmediate(resolve));
+      }
+      release();
+      await again;
+      assert.equal(status(), 'started');
+      assert.deepEqual(order, [
+        'startDescriptorWallet',
+        'stop',
+        'startDescriptorWallet',
+      ]);
     });
   });
 
