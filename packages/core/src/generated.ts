@@ -141,6 +141,13 @@ export interface Config {
    */
   walletFeeURL: string;
   /**
+   * RemoteSigner, when set, runs the wallet watch-only with every
+   * fund signature from this lnd-compatible signer, such as
+   * wavesigner. The wallet must then be created from a watch-only
+   * bundle or manifest (StartWatchOnlyWallet).
+   */
+  remoteSigner?: RemoteSignerConfig;
+  /**
    * WalletBtcwalletBlockHeadersSource is a local file path or HTTP(S)
    * URL that btcwallet/neutrino imports block headers from on startup.
    */
@@ -221,6 +228,34 @@ export interface Config {
    * BufferSize overrides the bufconn listener buffer size.
    */
   bufferSize: number /* int */;
+}
+/**
+ * RemoteSignerConfig is the remote signer a watch-only wallet signs
+ * through.
+ */
+export interface RemoteSignerConfig {
+  /**
+   * RPCHost is the signer's gRPC host:port.
+   */
+  rPCHost: string;
+  /**
+   * MacaroonPath is the macaroon the signer issued for this wallet.
+   */
+  macaroonPath: string;
+  /**
+   * TLSCertPath is the signer's TLS certificate.
+   */
+  tLSCertPath: string;
+  /**
+   * ConnectTimeout bounds connecting to the signer; zero selects the
+   * daemon default.
+   */
+  connectTimeout: any /* time.Duration */;
+  /**
+   * RequestTimeout bounds each signing request; zero selects the
+   * daemon default.
+   */
+  requestTimeout: any /* time.Duration */;
 }
 
 //////////
@@ -371,6 +406,11 @@ export interface Info {
   walletState: WalletState;
   identityPubKey: string;
   serverInfo?: ServerInfo;
+  /**
+   * ManifestHash is the hash of the manifest a watch-only wallet was
+   * created from; empty otherwise.
+   */
+  manifestHash: string;
 }
 /**
  * ServerInfo contains the operator policy hints needed by wallet hosts.
@@ -398,6 +438,20 @@ export interface CreateWalletRequest {
   recoveryWindow: number /* uint32 */;
   descriptors: string[];
   birthday: string;
+  /**
+   * WatchOnlyBundle creates a watch-only wallet from a remote
+   * signer's bundle, full or minimal. It needs Config.RemoteSigner.
+   */
+  watchOnlyBundle: string /* []byte */;
+  /**
+   * WatchOnlyManifest with AuthKeys creates a watch-only wallet whose
+   * fund slots come from several keys. It needs Config.RemoteSigner;
+   * OverrideIdentity allows a manifest that replaces the identity
+   * family.
+   */
+  watchOnlyManifest: string /* []byte */;
+  authKeys: string /* []byte */;
+  overrideIdentity: boolean;
 }
 /**
  * CreateWalletResult returns the seed words, daemon identity, the public
@@ -410,6 +464,7 @@ export interface CreateWalletResult {
   identityPubKey: string;
   rootFingerprint: string;
   descriptors: string[];
+  manifestHash: string;
   recoveryRan: boolean;
   recoveredBoardingAddresses: number /* uint32 */;
   recoveredBoardingUTXOs: number /* uint32 */;
@@ -1368,3 +1423,45 @@ export const EntryFailureCodeNeedsIntervention: EntryFailureCode = "needs_interv
  * specific classification.
  */
 export const EntryFailureCodeFailed: EntryFailureCode = "failed";
+
+//////////
+// source: watchonly.go
+
+/**
+ * WatchOnlyWalletRequest opens a watch-only wallet at an explicit daemon
+ * data directory: one created from a remote signer's bundle (Bundle, full
+ * or minimal) or from a manifest with its authentication keys (Manifest
+ * and AuthKeys). Every fund signature comes from Config.RemoteSigner.
+ * WalletPassword protects the wallet database and, for a minimal bundle or
+ * a manifest, the authentication keys the daemon keeps; a watch-only
+ * wallet has no other secret to derive it from, so the host supplies it.
+ * The other fields behave as in DescriptorWalletRequest.
+ */
+export interface WatchOnlyWalletRequest {
+  bundle: string /* []byte */;
+  manifest: string /* []byte */;
+  authKeys: string /* []byte */;
+  overrideIdentity: boolean;
+  walletPassword: string /* []byte */;
+  birthday: string;
+  expectedIdentityPubKey: string;
+  recoverState: boolean;
+  recoveryWindow: number /* uint32 */;
+}
+/**
+ * WatchOnlyWalletOpenResult reports a watch-only wallet import or unlock
+ * and the optional state-recovery scan.
+ */
+export interface WatchOnlyWalletOpenResult {
+  imported: boolean;
+  identityPubKey: string;
+  rootFingerprint: string;
+  manifestHash: string;
+  descriptors: string[];
+  recoveryRan: boolean;
+  recoveredBoardingAddresses: number /* uint32 */;
+  recoveredBoardingUTXOs: number /* uint32 */;
+  recoveredVTXOs: number /* uint32 */;
+  recoveredOORReceiveScripts: number /* uint32 */;
+  recoveredOORRecipientEvents: number /* uint32 */;
+}
