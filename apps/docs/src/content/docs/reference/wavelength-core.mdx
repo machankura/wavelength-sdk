@@ -874,11 +874,20 @@ export const createWalletRequestSig = `type CreateWalletRequest = {
   seedPassphrase?: string;
   recoverState?: boolean;
   recoveryWindow?: number;
+  descriptors?: string[];
+  birthday?: Date;
+  watchOnlyBundle?: string;
+  watchOnlyManifest?: string;
+  authKeys?: string;
+  overrideIdentity?: boolean;
 };`;
 export const createWalletResultSig = `type CreateWalletResult = {
   mnemonic: string[];
   encipheredSeed: string;
   identityPubKey: string;
+  rootFingerprint: string;
+  descriptors: string[];
+  manifestHash: string;
   recoveryRan: boolean;
   recoveredBoardingAddresses: number;
   recoveredBoardingUTXOs: number;
@@ -911,7 +920,17 @@ export const openWalletFromPasskeyResultSig = `type OpenWalletFromPasskeyResult 
 
 Creates a new wallet from the given request: generates (or imports) a
 mnemonic, enciphers it with `password`, and returns the seed words for backup
-display.
+display. It can instead import private `descriptors`, or create a watch-only
+wallet from a remote signer's export. Those two return no seed words, because
+the wallet has no mnemonic.
+
+A watch-only wallet needs the daemon to have been started with the
+`remoteSigner*` settings, so it is available on native transports only: on the
+web transport this rejects with `invalid_config` before anything is sent.
+`password` protects the wallet database and any authentication keys, and unlocks
+the wallet on later starts through [`unlockWallet()`](#unlockWallet). The signer
+must be reachable both times, because the daemon has it sign a challenge with
+each key on every open.
 
 <Signature title="wavelength-core.d.ts" code={createWalletMethodSig} />
 
@@ -934,7 +953,17 @@ counters.
   { name: 'seedPassphrase', type: 'string', desc: 'Optional. A BIP-39 passphrase applied on top of the mnemonic.' },
   { name: 'recoverState', type: 'boolean', desc: "Optional. Opt into server-assisted recovery: rebuild wallet state (boarding UTXOs, VTXOs, receive history) from the seed by querying the operator's indexer. Set it when restoring from a mnemonic so funds and activity come back. Defaults to false." },
   { name: 'recoveryWindow', type: 'number', desc: 'Optional. The per-key-family address look-ahead used during recovery. Only meaningful when recoverState is true; omit to let the daemon resolve its own default.' },
+  { name: 'descriptors', type: 'string[]', desc: 'Optional. Private descriptors to import instead of a mnemonic, sharing one master key or covering the on-chain account and every key family. As sensitive as a seed.' },
+  { name: 'birthday', type: 'Date', desc: 'Optional. The earliest date imported keys may have received funds, which bounds the first rescan. Ignored for mnemonics.' },
+  { name: 'watchOnlyBundle', type: 'string', desc: "Optional. A remote signer's export, from `wavesigner export-watchonly`. A minimal bundle holds private authentication keys, so keep it out of logs. Native transports only." },
+  { name: 'watchOnlyManifest', type: 'string', desc: 'Optional. The JSON manifest of a signer with per-slot key overrides, used instead of watchOnlyBundle. Native transports only.' },
+  { name: 'authKeys', type: 'string', desc: 'The authentication private keys that go with watchOnlyManifest, and required with it.' },
+  { name: 'overrideIdentity', type: 'boolean', desc: "Optional. Allows a watchOnlyManifest that replaces the identity family's key." },
 ]} />
+
+A request takes one source: a mnemonic, descriptors, a bundle, or a manifest with
+its authentication keys. Combining watch-only inputs with any other source rejects
+with `invalid_watch_only`.
 
 <ApiTypeLabel name="CreateWalletResult" />
 
@@ -944,6 +973,9 @@ counters.
   { name: 'mnemonic', type: 'string[]', desc: 'The seed words. Display this to the user for backup; it is not recoverable from the daemon afterward.' },
   { name: 'encipheredSeed', type: 'string', desc: 'The password-enciphered seed, as stored by the daemon.' },
   { name: 'identityPubKey', type: 'string', desc: "The wallet's identity public key." },
+  { name: 'rootFingerprint', type: 'string', desc: 'The hex BIP32 fingerprint of the master key, when the wallet knows it.' },
+  { name: 'descriptors', type: 'string[]', desc: 'The public descriptors the wallet watches, safe for watch-only software.' },
+  { name: 'manifestHash', type: 'string', desc: 'The hash of the manifest a watch-only wallet was created from; empty otherwise.' },
   { name: 'recoveryRan', type: 'boolean', desc: 'True when mnemonic was supplied and the daemon ran chain recovery to rediscover funds.' },
   { name: 'recoveredBoardingAddresses', type: 'number', desc: 'Count of boarding addresses recovered. Only meaningful when recoveryRan is true.' },
   { name: 'recoveredBoardingUTXOs', type: 'number', desc: 'Count of boarding UTXOs recovered.' },
