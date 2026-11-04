@@ -20,6 +20,8 @@ import type {
   ReceiveRequest,
   ReceiveResult,
   RecoveryState,
+  ListWalletDescriptorsRequest,
+  ListWalletDescriptorsResult,
   RestoreWalletRequest,
   RuntimeConfig,
   RuntimePhase,
@@ -140,7 +142,7 @@ export function useWalletCreate(): UseWalletCreateResult {
 
 /** The result of {@link useWalletRestore}. */
 export type UseWalletRestoreResult = {
-  /** Restores a wallet from a mnemonic or from private output descriptors. */
+  /** Restores a wallet from a mnemonic, private descriptors, or a signer's export. */
   restore: (req: RestoreWalletRequest) => Promise<WalletInfo>;
   /** True while a restore is in flight. */
   restorePending: boolean;
@@ -465,6 +467,48 @@ export function useWalletList(): UseWalletListResult {
     listError: m.error,
     listData: m.data,
     resetList: m.reset,
+  };
+}
+
+/** The result of {@link useWalletDescriptors}. */
+export type UseWalletDescriptorsResult = {
+  /**
+   * Returns the open wallet's descriptors: public by default, or private when
+   * the request resupplies the wallet's mnemonic or root descriptors.
+   */
+  listDescriptors: (
+    req?: ListWalletDescriptorsRequest,
+  ) => Promise<ListWalletDescriptorsResult>;
+  listDescriptorsPending: boolean;
+  listDescriptorsError: Error | null;
+  resetListDescriptors: () => void;
+};
+
+/**
+ * Exports the open wallet's descriptors on demand. Unlike the other hooks, this
+ * one has no data field: a result can hold private keys, so it goes to the
+ * caller and is never kept in React state.
+ */
+export function useWalletDescriptors(): UseWalletDescriptorsResult {
+  const engine = useWalletEngine();
+  const m = useWalletMutationState<void>();
+  const listDescriptors = useCallback(
+    async (req?: ListWalletDescriptorsRequest) => {
+      let result: ListWalletDescriptorsResult | undefined;
+      await m.track(async () => {
+        result = await engine.listWalletDescriptors(req);
+      });
+
+      return result as ListWalletDescriptorsResult;
+    },
+    [engine, m.track],
+  );
+
+  return {
+    listDescriptors,
+    listDescriptorsPending: m.pending,
+    listDescriptorsError: m.error,
+    resetListDescriptors: m.reset,
   };
 }
 

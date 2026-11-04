@@ -12,6 +12,7 @@ import {
   useWallet,
   useWalletActivity,
   useWalletBalance,
+  useWalletDescriptors,
   useWalletSend,
   useWalletRefresh,
   useWalletExit,
@@ -468,5 +469,44 @@ describe("exit hooks", () => {
     });
     assert.equal(result.current.statusError?.message, "x");
     assert.equal(result.current.statusPending, false);
+  });
+});
+
+describe("useWalletDescriptors", () => {
+  const secret = "tr(tprvSECRET/86h/0h/0h/<0;1>/*)";
+
+  it("returns the result to the caller and keeps none in state", async () => {
+    const { client, engine } = createTestEngine();
+    Object.assign(client, {
+      listWalletDescriptors: () =>
+        Promise.resolve({ descriptors: [secret], includesPrivate: true }),
+    });
+    const { result } = renderWithEngine(engine, () => useWalletDescriptors());
+
+    let listed: { descriptors: string[] } | undefined;
+    await act(async () => {
+      listed = await result.current.listDescriptors({
+        includePrivate: true,
+        mnemonic: ["a"],
+      });
+    });
+
+    assert.deepEqual(listed?.descriptors, [secret]);
+    assert.equal(result.current.listDescriptorsPending, false);
+    assert.equal(result.current.listDescriptorsError, null);
+    assert.ok(!JSON.stringify(result.current).includes("tprvSECRET"));
+  });
+
+  it("captures a failure and rethrows it", async () => {
+    const { engine } = createTestEngine();
+    const { result } = renderWithEngine(engine, () => useWalletDescriptors());
+
+    await act(async () => {
+      await assert.rejects(result.current.listDescriptors(), /cannot list/);
+    });
+    assert.match(result.current.listDescriptorsError?.message ?? "", /cannot list/);
+
+    act(() => result.current.resetListDescriptors());
+    assert.equal(result.current.listDescriptorsError, null);
   });
 });
