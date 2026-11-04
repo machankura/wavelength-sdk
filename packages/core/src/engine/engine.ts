@@ -140,7 +140,13 @@ export interface WalletEngine {
   stop(): Promise<void>;
   /** Re-fetches info, balance, and activity concurrently. */
   refresh(): Promise<void>;
-  /** Creates a new wallet, refetches info, and refreshes in the background. */
+  /**
+   * Creates a new wallet, refetches info, and refreshes in the background. If it
+   * rejects having left a database behind, as a watch-only wallet does when its
+   * signer holds other keys, the phase moves to locked: retry with unlockWallet.
+   * A signer that could not be reached leaves no database, so the phase stays
+   * needsWallet and creating again works.
+   */
   createWallet(req: CreateWalletRequest): Promise<CreateWalletResult>;
   /**
    * Restores a wallet from a mnemonic, private descriptors, or a remote signer's
@@ -435,10 +441,16 @@ class WavelengthEngine implements WalletEngine {
   async createWallet(req: CreateWalletRequest): Promise<CreateWalletResult> {
     this.#assertNotDisposed();
     return this.#measureWallet('createTotal', async () => {
-      const result = await this.#measureWallet(
-        'createRpc',
-        () => this.client.createWallet(req),
-      );
+      let result: CreateWalletResult;
+      try {
+        result = await this.#measureWallet(
+          'createRpc',
+          () => this.client.createWallet(req),
+        );
+      } catch (err) {
+        await this.#followLockedWallet();
+        throw err;
+      }
       await this.#adoptInfo('create');
       this.#kickRefresh();
 
@@ -559,6 +571,7 @@ class WavelengthEngine implements WalletEngine {
             { type: 'restoreFailedWalletDown' },
             { recovery: { status: 'failed', error, walletUsable: false } },
           );
+          await this.#followLockedWallet(probe);
           this.#rejectRestore(error);
         }
       },
@@ -830,6 +843,24 @@ class WavelengthEngine implements WalletEngine {
   // every attempt fails the daemon is presumed gone: escalate via
   // walletAdoptionFailed rather than silently leaving the wallet stuck
   // without info.
+  // The daemon creates a watch-only wallet's database before it checks the
+  // signer's keys, so a create that fails on them leaves a locked wallet behind.
+  // Follow it, or the host keeps offering a create that can now only fail with
+  // "wallet already exists" when the way forward is to unlock.
+  async #followLockedWallet(known?: WalletInfo | null): Promise<void> {
+    let info = known;
+    if (info === undefined) {
+      try {
+        info = await this.client.getInfo();
+      } catch {
+        return;
+      }
+    }
+    if (info?.walletState === WalletState.Locked && !this.#disposed) {
+      this.#dispatch({ type: 'infoReceived', info }, { info });
+    }
+  }
+
   async #adoptInfo(
     operation: 'create' | 'unlock' | 'passkeyOpen',
   ): Promise<WalletInfo | null> {

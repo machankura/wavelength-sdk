@@ -416,6 +416,44 @@ describe('engine wallet verbs', () => {
     engine.dispose();
   });
 
+  it('a create that leaves a locked wallet behind moves to locked', async () => {
+    const client = new FakeWavelengthClient();
+    client.info = noneInfo;
+    const engine = createWalletEngine({ client });
+    client.resolveReady();
+    await flush();
+    await engine.start({} as never);
+    client.impl('createWallet', () => {
+      client.info = { walletState: 'locked' } as WalletInfo;
+
+      return Promise.reject(new Error('verify remote signer'));
+    });
+    await assert.rejects(
+      () => engine.createWallet({ password: 'x', watchOnlyBundle: 'b' }),
+      /verify remote signer/,
+    );
+    assert.equal(engine.getSnapshot().phase, 'locked');
+    engine.dispose();
+  });
+
+  it('a create that cannot reach the signer stays on needsWallet', async () => {
+    const client = new FakeWavelengthClient();
+    client.info = noneInfo;
+    const engine = createWalletEngine({ client });
+    client.resolveReady();
+    await flush();
+    await engine.start({} as never);
+    client.impl('createWallet', () =>
+      Promise.reject(new Error('connect to remote signer')),
+    );
+    await assert.rejects(
+      () => engine.createWallet({ password: 'x', watchOnlyBundle: 'b' }),
+      /connect to remote signer/,
+    );
+    assert.equal(engine.getSnapshot().phase, 'needsWallet');
+    engine.dispose();
+  });
+
   it('send resolves on the daemon ack without awaiting the refresh', async () => {
     const { client, engine } = await readyEngine();
     // A hanging refresh must not delay the send resolution.
@@ -665,6 +703,24 @@ describe('engine restore', () => {
       } as never),
       /exactly one of/,
     );
+    engine.dispose();
+    mock.timers.reset();
+  });
+
+  it('a restore that leaves a locked wallet behind moves to locked', async () => {
+    mock.timers.enable({ apis: ['setInterval', 'setTimeout'] });
+    const { client, engine } = await needsWalletEngine();
+    client.impl('createWallet', () => {
+      client.info = { walletState: 'locked' } as WalletInfo;
+
+      return Promise.reject(new Error('verify remote signer'));
+    });
+    await assert.rejects(
+      () => engine.restoreWallet({ password: 'pw', watchOnlyBundle: 'b' }),
+      /verify remote signer/,
+    );
+    assert.equal(engine.getSnapshot().phase, 'locked');
+    assert.equal(engine.getSnapshot().recovery.status, 'failed');
     engine.dispose();
     mock.timers.reset();
   });
