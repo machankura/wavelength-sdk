@@ -1,0 +1,94 @@
+---
+title: wavesigner
+description: Keep a wallet's private keys in a separate process that answers a watch-only daemon's signing requests.
+---
+
+import Callout from '~/components/mdx/Callout.astro';
+
+`wavesigner` keeps a wallet's private keys and answers the signing requests of a
+watch-only daemon. It is a separate binary from `wavecli`. Create the key store
+once, export the watch-only bundle for the daemon, then run the signer where only
+that daemon can reach it. lnd also works as a remote signer. See
+[Use a remote signer](/guides/use-a-remote-signer/) for the whole flow.
+
+The key store password comes from `WAVESIGNER_PASSWORD` or `--password-file`.
+
+## Global flags
+
+| Flag | Default | Description |
+|---|---|---|
+| `--network` | `mainnet` | `mainnet`, `testnet`, `testnet4`, `signet`, `regtest` or `simnet`. |
+| `--datadir` | `~/.wavesigner` | Signer data directory. |
+| `--password-file` | (none) | File holding the key store password. |
+
+## create
+
+Creates the encrypted key store from a descriptor file (master-key descriptors or
+account-level private keys, as [`create --descriptor-file`](/cli/create/) accepts)
+or a Wavelength aezeed mnemonic file.
+
+| Flag | Default | Description |
+|---|---|---|
+| `--descriptor-file` | (none) | File of master-key descriptors or account-level keys. |
+| `--mnemonic-file` | (none) | File holding a Wavelength 24-word aezeed mnemonic. An lnd mnemonic is not interchangeable: lnd derives other keys from the same words. |
+| `--seed-passphrase-file` | (none) | File holding the mnemonic's optional aezeed passphrase. |
+| `--override` | (none) | `SLOT=FILE`: fill a fund slot (`onchain`, `6`, `42`, `44`, `45` or `202`) with the key in `FILE`, either `[fingerprint/path]XPRV` or a master `XPRV/path`. Repeatable. |
+| `--override-identity` | `false` | Allow `--override 6`, which gives the wallet a different identity, mailbox and swap key. |
+| `--manifest` | (none) | Restore check: refuse unless the keys fill every slot of this manifest exactly. |
+
+## export-watchonly
+
+Writes what the daemon's [`create`](/cli/create/) takes. By default that is a full
+bundle of public keys, and every signature then comes from this signer. A signer
+with overrides cannot export a bundle, because a bundle names one root, so it
+exports a manifest and an authentication keys file instead.
+
+| Flag | Default | Description |
+|---|---|---|
+| `--output` | (none) | Bundle file to write. |
+| `--minimal` | `false` | Write a minimal bundle for split signing. It holds private keys and is written owner-only. |
+| `--manifest-out` | (none) | Write the wallet manifest here. It is public. |
+| `--auth-keys-out` | (none) | Write the authentication keys here, with `--manifest-out`. They are private and written owner-only. |
+
+## run
+
+Decrypts the key store and serves the remote signer protocol. The daemon needs
+`tls.cert` and `signer.macaroon` from the network directory, which `run` writes on
+first start.
+
+<Callout type="caution" title="The macaroon grants signing">
+Give `signer.macaroon` to that one daemon only, and let only that daemon reach the
+signer's port.
+</Callout>
+
+| Flag | Default | Description |
+|---|---|---|
+| `--listen` | `localhost:10019` | `host:port` to serve the remote signer protocol on. |
+| `--tlsextradomain` | (none) | Extra domain for a newly generated TLS certificate. Set it before the first start if the daemon reaches the signer by another name. |
+| `--tlsextraip` | (none) | Extra IP address for a newly generated TLS certificate. |
+| `--watchonly-host` | (none) | Dial this daemon's RPC `host:port` instead of waiting for it to dial in, for a daemon run with `wallet.remotesigner.allowinbound`. |
+| `--watchonly-macaroon` | (none) | Daemon macaroon granting `remotesigner:generate`; see [`bakemacaroon`](/cli/bakemacaroon/). |
+| `--watchonly-tlscert` | (none) | The watch-only daemon's TLS certificate. |
+
+## Example
+
+```bash title="Terminal"
+export WAVESIGNER_PASSWORD='choose-a-real-passphrase'
+wavesigner --network=signet create --mnemonic-file wallet.mnemonic
+wavesigner --network=signet export-watchonly --output signer.bundle
+wavesigner --network=signet run --listen=0.0.0.0:10019 \
+  --tlsextradomain=signer.example
+```
+
+With fund slots from other keys, the export is a manifest:
+
+```bash title="Terminal"
+wavesigner --network=signet create --mnemonic-file wallet.mnemonic \
+  --override onchain=cold-a.key
+wavesigner --network=signet export-watchonly \
+  --manifest-out wallet.manifest --auth-keys-out auth.keys
+```
+
+To restore that signer, give `create` the primary root, an `--override` for every
+overridden slot, and `--manifest wallet.manifest`. It refuses a key store that does
+not fill every slot with the key the manifest records.

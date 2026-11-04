@@ -105,6 +105,7 @@ export const NAV: NavGroup[] = [
       { slug: 'guides/send-a-payment', label: 'Send a payment', section: 'guides' },
       { slug: 'guides/receive-a-lightning-payment', label: 'Receive a Lightning payment', section: 'guides' },
       { slug: 'guides/use-a-passkey', label: 'Use a passkey', section: 'guides' },
+      { slug: 'guides/use-a-remote-signer', label: 'Use a remote signer', section: 'guides' },
       { slug: 'guides/handle-phases-and-errors', label: 'Handle phases and errors', section: 'guides' },
       { slug: 'guides/unilateral-exit', label: 'Unilateral exit', section: 'guides' },
     ],
@@ -223,6 +224,8 @@ export const CLI_NAV: NavGroup[] = [
       { slug: 'cli/balance', label: 'balance', section: 'cli-wallet' },
       { slug: 'cli/exit', label: 'exit', section: 'cli-wallet' },
       { slug: 'cli/wallet-sweep', label: 'wallet-sweep', section: 'cli-wallet' },
+      { slug: 'cli/descriptors', label: 'descriptors', section: 'cli-wallet' },
+      { slug: 'cli/export-watchonly', label: 'export-watchonly', section: 'cli-wallet' },
     ],
   },
   {
@@ -241,6 +244,7 @@ export const CLI_NAV: NavGroup[] = [
     items: [
       { slug: 'cli/ark', label: 'ark', section: 'cli-advanced' },
       { slug: 'cli/recovery', label: 'recovery', section: 'cli-advanced' },
+      { slug: 'cli/wavesigner', label: 'wavesigner', section: 'cli-advanced' },
       { slug: 'cli/dev', label: 'dev', section: 'cli-advanced' },
     ],
   },

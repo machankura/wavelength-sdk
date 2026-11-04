@@ -1,0 +1,42 @@
+---
+title: export-watchonly
+description: Write the bundle for moving this wallet's keys to a remote signer.
+---
+
+import Callout from '~/components/mdx/Callout.astro';
+
+Writes the bundle that [`create --watch-only-bundle-file`](/cli/create/) reads,
+for moving a wallet's keys to a remote signer: every account public key, or with
+`--minimal` the fund slots as public keys and the two authentication families as
+private keys, for split signing.
+
+It requires the wallet's mnemonic, its root descriptors, or its account-level
+keys. The daemon checks them against the open wallet. The output file must not
+exist yet.
+
+<Callout type="caution" title="A minimal bundle holds private keys">
+The two authentication keys it carries cannot move funds, but they are still
+secret, so a minimal bundle is written readable by its owner only. A full bundle
+holds no secret, though it reveals every address the wallet will use.
+</Callout>
+
+## Flags
+
+| Flag | Default | Description |
+|---|---|---|
+| `--output` | (none) | Bundle file to write. |
+| `--minimal` | `false` | Write a minimal bundle for split signing. |
+| `--mnemonic-file` | (none) | Path to the wallet's 24-word aezeed mnemonic. |
+| `--seed-passphrase-file` | (none) | Path to a file containing the optional aezeed passphrase. |
+| `--descriptor-file` | (none) | Path to the wallet's private root descriptors or account keys. |
+
+## Example
+
+```bash title="Terminal"
+wavecli export-watchonly --mnemonic-file wallet.mnemonic --output signer.bundle
+wavecli export-watchonly --mnemonic-file wallet.mnemonic --minimal \
+  --output minimal.bundle
+```
+
+To export from the signer instead, use
+[`wavesigner export-watchonly`](/cli/wavesigner/).

@@ -5,12 +5,26 @@ description: How the Wavelength SDK derives the wallet seed from a passkey or pa
 
 import Callout from '~/components/mdx/Callout.astro';
 
-Every Wavelength wallet is a hierarchical-deterministic (HD) wallet rooted in
-a single seed. The seed's origin depends on the auth mode (typed password
-or passkey), and everything else follows from it: what sits on disk, what
-counts as a backup, and what a user needs to get funds back on a new device.
+A Wavelength wallet is usually a hierarchical-deterministic (HD) wallet rooted
+in a single seed, whose origin depends on the auth mode (typed password or
+passkey). It can instead be built from keys that already exist: private output
+descriptors, or a remote signer that keeps the keys off the device entirely.
+What a wallet is built from decides what sits on disk, what counts as a backup,
+and what a user needs to get funds back on a new device.
 For the lifecycle states and UI phases around unlock, see
 [Wallet lifecycle & auth](/concepts/wallet-lifecycle-and-auth/).
+
+## Where the keys come from
+
+| Wallet | Keys come from | Keys live in | Unlocked by |
+|---|---|---|---|
+| Password | A generated or imported 24-word mnemonic | The wallet database | The password |
+| Passkey | The passkey's PRF output | The wallet database | The passkey |
+| Descriptor | Private output descriptors you supply | The wallet database | The password you chose, or one derived from the keys |
+| Watch-only | A remote signer's export | The signer. The wallet database holds public keys and at most two authentication keys | The password you chose, with the signer reachable |
+
+The next sections cover the seed-based pair, then
+[descriptor and watch-only wallets](#descriptor-and-watch-only-wallets).
 
 ## One seed, two ways to derive it
 
@@ -133,6 +147,37 @@ the daemon (`createWallet({ password })`) or imported by the user
 (`seedPassphrase`) can be layered on an imported mnemonic; passkey wallets
 always use an empty one.
 
+## Descriptor and watch-only wallets
+
+A **descriptor wallet** is built from private output descriptors, for keys that
+another wallet already holds: either descriptors that share one master key, or
+account-level private keys covering the on-chain account and every key family. See
+[Restore a wallet](/guides/restore-a-wallet/#restore-from-output-descriptors).
+There is no mnemonic, so the descriptors are the wallet: they are as sensitive as a
+seed. `createWallet({ password, descriptors })` protects the database with the
+password you choose. `startDescriptorWallet()` takes no password and derives one
+from the keys, so the same descriptors unlock it on every open.
+
+A **watch-only wallet** keeps its private keys on a separate machine. A remote
+signer such as `wavesigner` or lnd holds them, and the wallet holds public keys and
+asks the signer over gRPC for every signature. It needs a native transport: a
+browser runtime cannot dial a signer, so the web transport refuses these wallets.
+See [Use a remote signer](/guides/use-a-remote-signer/).
+
+A signer exports one of three things:
+
+- A **bundle** of public keys. Every signature then comes from the signer.
+- A **minimal bundle**, which adds the two authentication keys as private keys. The
+  daemon signs round joins and payment receipts itself, while every key that can
+  move funds stays on the signer. It holds private keys, so keep it out of logs.
+- A **manifest** with an **authentication keys** file, when a wallet's fund slots
+  come from different keys. The manifest is public. Its hash is reported as
+  `manifestHash` and identifies which manifest created the wallet.
+
+On every open, the daemon has the signer sign a challenge with each fund key and
+checks the signatures against its own copy. A wallet pointed at the wrong signer
+refuses to open instead of failing at its first spend.
+
 ## What is stored where
 
 | Artifact | Where | Protected by |
@@ -142,11 +187,16 @@ always use an empty one.
 | Passkey private key | Platform authenticator / passkey provider | Device biometrics or PIN; provider sync encryption |
 | `credentialId`, wallet-kind markers | App-level storage (`localStorage` on web, by convention) | Nothing (not secret) |
 | Mnemonic | Wherever the user wrote it down | The user |
+| Private descriptors | Imported into the wallet database, and wherever the user keeps their copy | Encrypted under the wallet DB password once imported |
+| Watch-only public keys, authentication keys | Wallet database | Encrypted under the wallet DB password |
+| Fund private keys of a watch-only wallet | The remote signer, not this device | The signer's own key store |
+| Signer macaroon and TLS certificate | Files the daemon opens by path, on the device | App-sandbox isolation; the macaroon grants signing |
 
 Nothing above leaves the device except the passkey itself, which the
 platform's passkey provider (iCloud Keychain, Google Password Manager,
 1Password, and similar) may sync end-to-end encrypted across the user's
-devices. The operator sees signed protocol messages, never keys.
+devices. The operator sees signed protocol messages, never keys. A watch-only
+wallet also sends the signer what it needs to sign, over TLS with the macaroon.
 
 ## Backup
 
@@ -175,6 +225,17 @@ A password wallet has exactly one backup layer: the mnemonic. The password
 cannot be recovered or reset from anywhere, and without the mnemonic a
 forgotten password means the funds are gone once the local database is lost.
 
+A descriptor wallet's backup is its private descriptors. A wallet opened with
+`startDescriptorWallet()` needs them on every open as well.
+
+A watch-only wallet's backup is the signer's: the keys are there, not on this
+device. Losing the device loses nothing that the signer and its export cannot
+rebuild. A wallet with a manifest needs more than a seed, because the manifest is
+the only record of which key fills which slot. Back up the manifest, every key
+source it names, and the primary root together. A signer restored from its primary
+seed alone holds different keys, and `wavesigner create --manifest` catches that by
+refusing a key store that does not fill every slot.
+
 ## Recovery paths
 
 | Scenario | Path | What comes back |
@@ -183,6 +244,10 @@ forgotten password means the funds are gone once the local database is lost.
 | New device, synced passkey | Discoverable passkey assertion + `openWalletFromPasskey()`. The wallet state is `'none'`, so the SDK derives the seed and imports it | Keys immediately; the view of funds converges in the background |
 | Lost passkey, has mnemonic | `createWallet({ password, mnemonic, recoverState: true })`; the wallet continues as a password wallet | Keys immediately; funds and history via server-assisted recovery |
 | Lost passkey and mnemonic | None | Nothing; there is no custodial reset |
+| New device, private descriptors | `createWallet({ password, descriptors, recoverState: true })` or `startDescriptorWallet()` | Keys immediately; funds and history via server-assisted recovery |
+| New device, watch-only wallet | `createWallet({ password, watchOnlyBundle })`, or a manifest with its `authKeys`, on a runtime started with the signer's settings | Public keys immediately; the view of funds converges, with recovery needing the signer too |
+| Lost signer, has its seed or keys | Rebuild the signer with `wavesigner create`, with `--manifest` for a wallet that has one | The same keys, which the wallet checks on its next open |
+| Lost signer and its keys | None | Nothing; a watch-only wallet cannot sign without them |
 
 Recovery restores the *seed* instantly; restoring the *view* of funds takes
 a scan. A mnemonic restore can opt into **server-assisted recovery** with

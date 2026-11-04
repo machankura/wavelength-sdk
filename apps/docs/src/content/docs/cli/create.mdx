@@ -1,6 +1,6 @@
 ---
 title: create
-description: Create a new wallet from a fresh seed, or recover an existing wallet from a mnemonic.
+description: Create a new wallet from a fresh seed, recover one from a mnemonic, or import descriptors or a remote signer's keys.
 ---
 
 import Callout from '~/components/mdx/Callout.astro';
@@ -24,6 +24,40 @@ aezeed seed passphrase comes from `WAVED_SEED_PASSPHRASE` or
 printf '%s\n' 'hunter2hunter2' | wavecli create --password-stdin
 ```
 
+A wallet can also be built from keys you already hold, in two ways. They have
+no mnemonic to show, and `--birthday` bounds the first rescan of each.
+
+**From descriptors.** `--descriptor-file` builds the wallet from private output
+descriptors, one per line. Blank lines and lines starting with `#` are ignored.
+The file holds one of two forms:
+
+- Descriptors that share one BIP32 master key: `tr()` under `86h/0h/0h` and
+  `wpkh()` under `84h/0h/0h`.
+- Account-level private keys, for keys exported from other software without the
+  master key: the `tr()` account at `[fp/86h/0h/0h]`, optionally `wpkh()` at
+  `[fp/84h/0h/0h]`, and the key families as one `[fp/1017h/COINh]xprv` line or
+  one `[fp/1017h/COINh/FAMILYh]xprv/0/*` line for every family 0 to 255. `COIN`
+  is `0` on mainnet and `1` elsewhere.
+
+```bash title="Terminal"
+wavecli create --descriptor-file wallet.descriptors --birthday 2026-01-01
+```
+
+**From a remote signer.** `--watch-only-bundle-file` creates a wallet that holds
+public keys only, with every signature coming from the daemon's
+`wallet.remotesigner`. A minimal bundle also holds the two authentication
+families as private keys, so the daemon signs round joins and payment receipts
+itself while every key that can move funds stays on the signer.
+`--watch-only-manifest` does the same when each fund slot may come from a
+different key, and needs `--auth-keys-file`. Export these with
+[`wavesigner`](/cli/wavesigner/), or from an existing wallet with
+[`export-watchonly`](/cli/export-watchonly/).
+
+```bash title="Terminal"
+wavecli create --watch-only-bundle-file signer.bundle --birthday 2026-01-01
+wavecli create --watch-only-manifest wallet.manifest --auth-keys-file auth.keys
+```
+
 <Callout type="caution" title="The mnemonic is shown once">
 On a fresh create the 24-word mnemonic is written to stderr exactly once and is
 NOT included in the JSON response on stdout. Capture it from stderr, or pass
@@ -42,6 +76,12 @@ the wallet unrecoverable.
 | `--recover` | `false` | Import an existing mnemonic and recover Ark wallet state. |
 | `--mnemonic-file` | (none) | Path to a file containing an existing 24-word aezeed mnemonic. Requires `--recover`. |
 | `--recovery-window` | `0` | Number of key indexes to scan per recovery family. Requires `--recover`; `0` uses the daemon default. |
+| `--descriptor-file` | (none) | Path to a file of private output descriptors or account-level private keys, one per line, to build the wallet from instead of a mnemonic. |
+| `--birthday` | (none) | Earliest date the descriptor or bundle keys may have received funds, as RFC 3339 or `YYYY-MM-DD`. Requires `--descriptor-file`, `--watch-only-bundle-file` or `--watch-only-manifest`. Without it the wallet scans from genesis. |
+| `--watch-only-bundle-file` | (none) | Path to the remote signer's account public keys, for a wallet whose private keys stay on that signer. |
+| `--watch-only-manifest` | (none) | Path to a key manifest assigning each fund slot its own public key. Requires `--auth-keys-file`. |
+| `--auth-keys-file` | (none) | Path to the authentication families' private keys, for `--watch-only-manifest`. |
+| `--override-identity` | `false` | Allow a `--watch-only-manifest` that replaces the identity family, which changes the wallet's Ark identity. |
 
 ## Example
 

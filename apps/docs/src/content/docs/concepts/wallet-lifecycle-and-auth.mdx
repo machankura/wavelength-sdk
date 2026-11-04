@@ -103,4 +103,16 @@ Passkeys tie unlock to a device and biometric or PIN verification. They remove p
 WebAuthn registration, PRF extension availability, and credential persistence are platform mechanics. See [Use a passkey](/guides/use-a-passkey/) for browser-specific steps; this page is the shared mental model.
 </Callout>
 
-From the wallet lifecycle perspective both paths converge: after unlock the daemon enters syncing, then ready. A restore (either path) instead passes through the engine-owned `'restoring'` phase first; recovery tracking through `snapshot.recovery` only kicks in when the call sets `recoverState: true`. Choose password for the simplest cross-device story; choose passkey when you want passwordless return visits on a trusted device. For what the seed and passwords actually are, and how backup and recovery work in each mode, see [Keys, backup & recovery](/concepts/keys-backup-and-recovery/).
+**Descriptor and watch-only wallets** unlock with a password too, and follow the same phases. What opens each:
+
+| Wallet | First open | Later opens |
+|--------|------------|-------------|
+| Password | `createWallet({ password })` | `unlockWallet({ password })` |
+| Passkey | `openWalletFromPasskey({ prfOutput })` | `openWalletFromPasskey({ prfOutput })` |
+| Descriptor, on the engine | `createWallet({ password, descriptors })` | `unlockWallet({ password })` |
+| Descriptor, on the client | `startDescriptorWallet(config, { descriptors })` | The same call; the password is derived from the keys |
+| Watch-only | `createWallet({ password, watchOnlyBundle })` | `unlockWallet({ password })` |
+
+A watch-only wallet also needs its signer on every open, because the daemon has the signer sign a challenge with each fund key first, including after the daemon restarts. A signer that is down or holds other keys is therefore a failed open, not a wrong password: surface the daemon's message and offer a retry. Pass the signer's settings in the config given to `start()`, because they apply from the moment the daemon boots. See [Use a remote signer](/guides/use-a-remote-signer/).
+
+From the wallet lifecycle perspective the paths converge: after unlock the daemon enters syncing, then ready. A restore (either path) instead passes through the engine-owned `'restoring'` phase first; recovery tracking through `snapshot.recovery` only kicks in when the call sets `recoverState: true`. Choose password for the simplest cross-device story; choose passkey when you want passwordless return visits on a trusted device. For what the seed and passwords actually are, and how backup and recovery work in each mode, see [Keys, backup & recovery](/concepts/keys-backup-and-recovery/).

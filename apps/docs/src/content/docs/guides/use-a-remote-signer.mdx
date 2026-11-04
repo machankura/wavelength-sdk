@@ -1,0 +1,146 @@
+---
+title: Use a remote signer
+description: Keep a wallet's private keys off the device by opening a watch-only wallet against a remote signer from React Native.
+---
+
+import Callout from '~/components/mdx/Callout.astro';
+
+A watch-only wallet holds public keys and asks a remote signer for every
+signature, so a compromised phone cannot move funds on its own. This guide sets
+up [`wavesigner`](/cli/wavesigner/), exports what the wallet needs, and opens the
+wallet from a React Native app. For how this fits with other wallet kinds, see
+[Keys, backup & recovery](/concepts/keys-backup-and-recovery/#descriptor-and-watch-only-wallets).
+
+<Callout type="caution" title="Native transports only">
+A browser runtime cannot dial a signer, so the web transport refuses a watch-only
+wallet with `invalid_config`, along with any `remoteSigner*` setting.
+</Callout>
+
+## Set up the signer
+
+Create the key store once, export the bundle, and run the signer where only your
+wallet can reach it. The certificate must name the address the wallet dials, so
+pass `--tlsextradomain` or `--tlsextraip` before the first start:
+
+```bash title="Terminal"
+export WAVESIGNER_PASSWORD='choose-a-real-passphrase'
+wavesigner --network=signet create --mnemonic-file wallet.mnemonic
+wavesigner --network=signet export-watchonly --output signer.bundle
+wavesigner --network=signet run --listen=0.0.0.0:10019 \
+  --tlsextradomain=signer.example
+```
+
+The first `run` writes `signer.macaroon` and `tls.cert` to
+`~/.wavesigner/signet/`. The wallet needs both on every start. The macaroon grants
+signing, so give it to this wallet only. An Android emulator reaches its host at
+`10.0.2.2`, which then goes in `--tlsextraip`.
+
+`export-watchonly` has two other forms: `--minimal` adds the two authentication
+keys, so the wallet signs round joins and payment receipts itself while every key
+that can move funds stays on the signer, and a signer with
+[per-slot overrides](/cli/wavesigner/) exports a manifest and authentication keys
+instead.
+
+## Open the wallet
+
+The daemon opens the macaroon and certificate as file paths, so put them in your
+app's private storage first. File APIs often use `file://` URIs; the daemon needs
+the plain path. Then pass the signer's settings to `start()` and create the wallet
+from the export:
+
+```tsx title="watch-only.tsx"
+import { useWallet, useWalletCreate } from '@lightninglabs/wavelength-react';
+
+const { start } = useWallet();
+const { create, createError } = useWalletCreate();
+
+await start({
+  network: 'signet',
+  dataDir,
+  remoteSignerRpcHost: 'signer.example:10019',
+  remoteSignerMacaroonPath: `${dataDir}/signer/signer.macaroon`,
+  remoteSignerTlsCertPath: `${dataDir}/signer/tls.cert`,
+});
+
+await create({
+  password,
+  watchOnlyBundle: bundleText,
+  birthday: new Date('2026-01-01'),
+});
+```
+
+For a manifest, pass `watchOnlyManifest` and `authKeys` instead of
+`watchOnlyBundle`. The result's `manifestHash`, also on `snapshot.info`, identifies
+which manifest created the wallet, so check it against your backup. A manifest that
+replaces the identity family's key needs `overrideIdentity: true`.
+
+`password` protects the local database and any authentication keys. The bundle and
+authentication keys are needed only for this first open, because the database then
+holds the imported keys, so do not keep them once it succeeds.
+
+If this call fails, the wallet may still exist, so read the phase before you offer a
+retry. The daemon connects to the signer, creates the database, and only then checks
+that the signer holds the wallet's keys, so the retry depends on how far it got:
+
+| What failed | `snapshot.phase` afterward | Retry with |
+|---|---|---|
+| The signer could not be reached | `needsWallet`: nothing was stored | `createWallet()` with the same inputs, once it is back |
+| The signer holds other keys, or a later step failed, such as a chain backend that is down or rate limiting | `locked`: the database exists | `unlockWallet()` and the same password |
+
+In the second case `createWallet()` could only fail with "wallet already exists".
+Show the error from the failed call on your unlock screen, because the form that held
+it is about to unmount.
+
+<Callout type="caution" title="Keep key material off the record">
+A minimal bundle and authentication keys hold private keys. Do not log them, send
+them to analytics or crash reporting, or leave them in app state once it succeeds.
+The macaroon file grants signing, so keep it out of platform backups too: on Android,
+set `android:allowBackup="false"` or exclude the wallet's data directory.
+</Callout>
+
+## Reopen it later
+
+On later starts, pass the same `remoteSigner*` settings to `start()` and unlock
+with the password. The bundle is not needed again:
+
+```ts title="reopen.ts"
+await start(configWithSigner);
+await unlock({ password });
+```
+
+A host using the client directly can instead call
+[`startWatchOnlyWallet()`](/reference/wavelength-core/#WatchOnlyWalletClient), which
+starts the daemon and opens the wallet in one step and takes the bundle or manifest
+on every open.
+
+## Handle a signer that is down
+
+`start()` does not contact the signer. On every open, the daemon has it sign a
+challenge with each fund key and checks the signatures, so the signer must be
+reachable to create or unlock the wallet, including after the daemon restarts, and a
+signer holding other keys is refused. Both surface as a failed open with the daemon's
+message, not as a wrong password:
+
+| Cause | Message contains | Fix |
+|---|---|---|
+| Signer down or unreachable | `connect to remote signer`, after the 30 second connect timeout | Retry once it is back |
+| Signer holds other keys | `signer does not hold the key for a wallet slot`, naming each slot | Point the wallet at the right signer |
+
+Show that message with a retry, and do not ask the user to re-enter their password
+for it. On a first open, the retry depends on the phase, as described under the
+first open above. The connect timeout is `remoteSignerConnectTimeoutSeconds`, so keep the unlock
+screen visibly busy for that long.
+
+Anything that signs afterward needs the signer as well, including sends, Ark rounds
+without a minimal bundle, and server-assisted recovery.
+
+## Back it up
+
+The keys are on the signer, so that is what to back up. With a manifest, back up the
+manifest, every key source it names, and the primary root together, because the
+manifest is the only record of which key fills which slot. To restore a signer that
+has one, run `wavesigner create` with `--manifest`, which refuses a key store that
+does not fill every slot.
+
+To see it working, the React Native demo has a watch-only flow: choose **Watch-only
+wallet** from the wallet list.

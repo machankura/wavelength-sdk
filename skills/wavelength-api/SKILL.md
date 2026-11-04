@@ -33,3 +33,8 @@ lists one page per RPC; every page has a markdown twin at `.md`.
   bare HTTP status semantics.
 - Amounts are satoshi-denominated integers unless a field's table says
   otherwise; never infer millisatoshis.
+- Private descriptors, minimal bundles and authentication keys are as
+  sensitive as a seed. Never log them or send them anywhere but the daemon.
+  `Create` takes them for descriptor and watch-only wallets, and
+  `ListWalletDescriptors` returns private descriptors only when the request
+  resupplies the wallet's mnemonic or root descriptors.

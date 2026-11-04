@@ -41,4 +41,14 @@ wavecli bakemacaroon \
   --save-to ./getinfo.macaroon
 ```
 
+A remote signer that dials in to a daemon run with
+`wallet.remotesigner.allowinbound` needs a credential too. Grant it only
+`remotesigner:generate`:
+
+```bash title="Terminal"
+wavecli bakemacaroon remotesigner:generate --save-to ./signer-inbound.macaroon
+```
+
+Pass that file to [`wavesigner run --watchonly-macaroon`](/cli/wavesigner/).
+
 Calls the daemon `MacaroonService.BakeMacaroon` RPC.

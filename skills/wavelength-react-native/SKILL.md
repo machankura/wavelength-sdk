@@ -34,6 +34,8 @@ Check the npm registry for current versions; do not rely on memorized ones.
 | Passkey rpId domain association | https://wavelength.lightning.engineering/react-native/get-started/passkey-setup.md |
 | Wallet creation and unlock | https://wavelength.lightning.engineering/guides/create-a-wallet.md |
 | Passkey protection | https://wavelength.lightning.engineering/guides/use-a-passkey.md |
+| Restoring from a phrase or descriptors | https://wavelength.lightning.engineering/guides/restore-a-wallet.md |
+| Keys on a remote signer (watch-only) | https://wavelength.lightning.engineering/guides/use-a-remote-signer.md |
 | Build or runtime failures | https://wavelength.lightning.engineering/react-native/troubleshooting.md |
 | Exact API surface | https://wavelength.lightning.engineering/reference/wavelength-react-native.md |
 
@@ -64,6 +66,14 @@ Check the npm registry for current versions; do not rely on memorized ones.
   an `assetlinks.json` (Android) and an `apple-app-site-association` plus
   Associated Domains entitlement (iOS); see the passkey setup page above.
   iOS passkey support is experimental.
+- Private descriptors, minimal bundles and authentication keys are as
+  sensitive as a seed. Never log them, send them anywhere but the wallet, or
+  keep them in app state after the first open. `useWalletDescriptors()` returns
+  its result to the caller and deliberately keeps none in React state.
+- A watch-only wallet needs the `remoteSigner*` settings in the config given to
+  `start()`, with the macaroon and certificate as plain file paths, not
+  `file://` URIs, and its signer on every open. A signer that is down is a failed
+  open with a retry, not a wrong password.
 - Activity arrives as typed `activity` events, re-emitted from native
   `wavelengthActivity` device events; do not poll for state changes by hand.
 

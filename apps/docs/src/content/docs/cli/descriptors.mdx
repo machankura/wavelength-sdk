@@ -1,0 +1,49 @@
+---
+title: descriptors
+description: Print the wallet's output descriptors, public by default.
+---
+
+import Callout from '~/components/mdx/Callout.astro';
+
+Prints the wallet's `tr` (BIP86) and `wpkh` (BIP84) output descriptors. By
+default they are public account-level descriptors, safe to import into
+watch-only software.
+
+`--private` prints private descriptors instead, for example to move a mnemonic
+wallet into descriptor-based software. It requires the wallet's mnemonic or its
+root descriptors, and the daemon checks them against the open wallet: it never
+reveals keys on its own. An optional seed passphrase comes from
+`--seed-passphrase-file` or `WAVED_SEED_PASSPHRASE`.
+
+`--ark` prints one `rawtr()` descriptor per Ark output instead: boarding outputs,
+live VTXOs and out-of-round receive scripts. External watch-only software can
+track them on chain; spending them still needs Wavelength.
+
+<Callout type="caution" title="Private descriptors are as sensitive as the seed">
+Anyone holding them can spend the wallet's on-chain funds. Keep them out of logs
+and shell history, and write them only somewhere you would write a mnemonic.
+</Callout>
+
+## Flags
+
+| Flag | Default | Description |
+|---|---|---|
+| `--private` | `false` | Print private descriptors. Requires `--mnemonic-file` or `--descriptor-file`. |
+| `--mnemonic-file` | (none) | Path to the wallet's 24-word aezeed mnemonic. |
+| `--seed-passphrase-file` | (none) | Path to a file containing the optional aezeed passphrase. |
+| `--descriptor-file` | (none) | Path to the wallet's private root descriptors. |
+| `--ark` | `false` | Print `rawtr()` descriptors for the wallet's Ark outputs. |
+| `--kind` | (all) | With `--ark`, only these kinds: `boarding`, `vtxo`, `oor-receive`. |
+
+## Example
+
+```bash title="Terminal"
+# Public account descriptors, safe for watch-only software
+wavecli descriptors
+
+# Private descriptors; the daemon checks the mnemonic first
+wavecli descriptors --private --mnemonic-file wallet.mnemonic
+
+# One descriptor per boarding output
+wavecli descriptors --ark --kind boarding
+```

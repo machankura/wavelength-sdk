@@ -35,6 +35,7 @@ Check the npm registry for current versions; do not rely on memorized ones.
 | Sending payments | https://wavelength.lightning.engineering/guides/send-a-payment.md |
 | Receiving payments | https://wavelength.lightning.engineering/guides/receive-a-lightning-payment.md |
 | Passkey protection | https://wavelength.lightning.engineering/guides/use-a-passkey.md |
+| Restoring from a phrase or descriptors | https://wavelength.lightning.engineering/guides/restore-a-wallet.md |
 | Asset hosting or COOP/COEP issues | https://wavelength.lightning.engineering/web/get-started/hosting-runtime-assets.md |
 
 ## Critical rules
@@ -55,6 +56,13 @@ Check the npm registry for current versions; do not rely on memorized ones.
 - Passkey ceremonies are injected. Pass `webPasskeyCeremony` from
   wavelength-web into `useWalletPasskey(ceremony)`; do not implement WebAuthn
   calls by hand.
+- Watch-only wallets are unavailable here: a browser runtime cannot dial a
+  remote signer, so `startWatchOnlyWallet`, a `watchOnlyBundle` or
+  `watchOnlyManifest`, and any `remoteSigner*` setting reject with
+  `invalid_config`. Do not try to work around it; the wallet could never sign.
+- Private descriptors are as sensitive as a seed. Never log them, send them
+  anywhere but the wallet, or keep them in app state. `useWalletDescriptors()`
+  returns its result to the caller and deliberately keeps none in React state.
 - The daemon persists to OPFS. Wallet state survives reloads; test flows
   must unlock an existing wallet rather than recreating it on every load.
 - Wallet state arrives as a lowercase string union (for example "ready");
