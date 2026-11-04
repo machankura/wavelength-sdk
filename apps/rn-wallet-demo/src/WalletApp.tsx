@@ -24,6 +24,7 @@ import {
   updateWallet,
   WalletEntry,
 } from './lib/walletRegistry';
+import { useSessionState } from './lib/useSessionState';
 import { useWalletRegistry } from './lib/useWalletRegistry';
 import { RuntimeNetwork, WalletEndpoints } from './lib/runtime-config';
 import { writeSignerFiles } from './lib/signerFiles';
@@ -83,7 +84,8 @@ export function WalletApp() {
   usePollWhileWaiting(hasPendingOnchain(activity, balance));
 
   const { wallets, refresh } = useWalletRegistry();
-  const [selectedWalletId, setSelectedWalletId] = useState<string | null>(
+  const [selectedWalletId, setSelectedWalletId] = useSessionState<string | null>(
+    'selectedWalletId',
     null,
   );
   // preStart is the sub-screen shown while no wallet is running: the list,
@@ -98,12 +100,13 @@ export function WalletApp() {
   >({ kind: 'list' });
   // pendingNetwork holds a legacy entry's unpersisted network guess until an
   // unlock proves it right.
-  const [pendingNetwork, setPendingNetwork] = useState<
+  const [pendingNetwork, setPendingNetwork] = useSessionState<
     { network: RuntimeNetwork; endpoints: WalletEndpoints } | null
-  >(null);
-  const [onboardingMode, setOnboardingMode] = useState<
+  >('pendingNetwork', null);
+  const [onboardingMode, setOnboardingMode] = useSessionState<
     'create' | 'restore' | 'watchOnly'
   >(
+    'onboardingMode',
     'create',
   );
   // regtestUnlocked gates the regtest network option and its advanced
@@ -112,8 +115,11 @@ export function WalletApp() {
   const activeEntry =
     (wallets ?? []).find((w) => w.id === selectedWalletId) ?? null;
 
-  const [mnemonic, setMnemonic] = useState<string[]>([]);
-  const [backupAcknowledged, setBackupAcknowledged] = useState(false);
+  const [mnemonic, setMnemonic] = useSessionState<string[]>('mnemonic', []);
+  const [backupAcknowledged, setBackupAcknowledged] = useSessionState(
+    'backupAcknowledged',
+    false,
+  );
   const [tab, setTab] = useState<AppTab>('home');
   // setupError surfaces a submitSetup failure (currently only a rejected
   // getDefaultDataDir call, which happens before the runtime is even
@@ -399,7 +405,9 @@ export function WalletApp() {
   // credential id used) on the registry entry, resolving a legacy entry's
   // pendingNetwork guess into its permanent record, and moves straight to
   // the dashboard: an unlocked wallet's recovery phrase was already shown on
-  // an earlier create.
+  // an earlier create. The exception is a phrase still waiting here, because
+  // switching apps to save it can restart the daemon and come back through this
+  // unlock; acknowledging it for the user would lose it for good.
   const onWalletUnlocked = useCallback(
     (kind: WalletKind, credentialId?: string) => {
       if (selectedWalletId) {
@@ -413,9 +421,9 @@ export function WalletApp() {
         }).then(refresh);
         setPendingNetwork(null);
       }
-      setBackupAcknowledged(true);
+      setBackupAcknowledged(mnemonic.length === 0);
     },
-    [selectedWalletId, pendingNetwork, refresh],
+    [selectedWalletId, pendingNetwork, mnemonic, refresh],
   );
 
   // onWatchOnlyLeftLocked keeps a failed first open's message for the unlock

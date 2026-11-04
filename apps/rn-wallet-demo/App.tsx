@@ -13,7 +13,10 @@ import { useFonts } from 'expo-font';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { WavelengthProvider } from '@lightninglabs/wavelength-react';
-import { createNativeWalletEngine } from '@lightninglabs/wavelength-react-native';
+import {
+  createNativeWalletEngine,
+  restartAfterBackground,
+} from '@lightninglabs/wavelength-react-native';
 import { passkeyCeremony } from './src/lib/passkeyCeremony';
 import { ThemeProvider, useTheme } from './src/theme/ThemeProvider';
 import { WalletApp } from './src/WalletApp';
@@ -21,6 +24,10 @@ import { WalletApp } from './src/WalletApp';
 // The engine is built once here and injected into the provider, which is
 // transport-agnostic.
 const engine = createNativeWalletEngine();
+
+// Returning from a real stay in the background restarts the daemon, which lands
+// an open wallet on the unlock screen: this demo stores no passwords.
+restartAfterBackground(engine);
 
 // Warm the memoized passkey support probe now, before onboarding ever
 // mounts, so its result is already resolved by the time a screen reads it.

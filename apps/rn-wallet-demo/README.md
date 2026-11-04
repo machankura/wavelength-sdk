@@ -60,6 +60,15 @@ The iOS build needs no code signing, so it works on a machine that has never
 set up an Apple developer account. Enabling passkeys is the one exception; see
 [Passkeys](#passkeys) below.
 
+## Background and return
+
+Leaving the app for more than 30 seconds and coming back restarts the embedded
+daemon (see `restartAfterBackground` in `App.tsx`), so an open wallet lands on the
+unlock screen. A shorter visit changes nothing, and neither does any visit while
+the wallet is locked. A recovery phrase you have not yet confirmed saving comes
+back after the unlock. Android's Home key is enough to try this; there is no need
+to stop the wallet from inside the app.
+
 ## Networks
 
 The start screen offers three presets (defined in `src/lib/runtime-config.ts`):
