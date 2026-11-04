@@ -12,6 +12,8 @@ const ENCIPHERED_SEED = 'AGVuY2lwaGVyZWQgc2VlZA==';
 const PRF_OUTPUT = 'ab'.repeat(32);
 const SEED_ENTROPY = 'AAECAwQFBgcICQoLDA0ODw==';
 const PRIVATE_DESCRIPTOR = 'tr(tprv8ZgxMBicQKsPdSecretRoot/86h/0h/0h/<0;1>/*)';
+const MINIMAL_BUNDLE = '[d34db33f/1017h/1h/21h]tprvMINIMALBUNDLE/0/*';
+const AUTH_KEYS = '[d34db33f/1017h/1h/43h]tprvAUTHKEYS/0/*';
 
 type Case = {
   method: string;
@@ -107,6 +109,49 @@ const CASES: Case[] = [
     redactedResult: { Imported: true, IdentityPubKey: '02aa', Descriptors: R },
   },
   {
+    method: 'startWatchOnlyWallet',
+    params: {
+      config: { data_dir: '/wallets', network: 'regtest' },
+      bundle: MINIMAL_BUNDLE,
+      wallet_password: PASSWORD_B64,
+    },
+    result: { Imported: true, ManifestHash: '' },
+    redactedParams: {
+      config: { data_dir: '/wallets', network: 'regtest' },
+      bundle: R,
+      wallet_password: R,
+    },
+    redactedResult: { Imported: true, ManifestHash: '' },
+  },
+  {
+    method: 'startWatchOnlyWallet',
+    params: {
+      config: { data_dir: '/wallets', network: 'regtest' },
+      manifest: '{"version":1}',
+      auth_keys: AUTH_KEYS,
+      wallet_password: PASSWORD_B64,
+    },
+    result: { Imported: true, ManifestHash: 'abc' },
+    redactedParams: {
+      config: { data_dir: '/wallets', network: 'regtest' },
+      manifest: '{"version":1}',
+      auth_keys: R,
+      wallet_password: R,
+    },
+    redactedResult: { Imported: true, ManifestHash: 'abc' },
+  },
+  {
+    method: 'createWallet',
+    params: {
+      WalletPassword: PASSWORD_B64,
+      WatchOnlyBundle: MINIMAL_BUNDLE,
+      AuthKeys: AUTH_KEYS,
+    },
+    result: { IdentityPubKey: '02aa' },
+    redactedParams: { WalletPassword: R, WatchOnlyBundle: R, AuthKeys: R },
+    redactedResult: { IdentityPubKey: '02aa' },
+  },
+  {
     method: 'listWalletDescriptors',
     params: {
       IncludePrivate: true,
@@ -127,6 +172,8 @@ const CASES: Case[] = [
 
 const SECRETS = [
   PRIVATE_DESCRIPTOR,
+  MINIMAL_BUNDLE,
+  AUTH_KEYS,
   PASSWORD_B64,
   PASSPHRASE_B64,
   ENCIPHERED_SEED,
@@ -167,7 +214,7 @@ describe('worker debug payload redaction', () => {
     );
     const listeners = new Map<string, Array<() => void>>();
     const logs: unknown[][] = [];
-    const results = new Map(CASES.map((c) => [c.method, c.result]));
+    let result: unknown;
     const self: Record<string, unknown> = {
       postMessage: () => undefined,
       addEventListener: (name: string, listener: () => void) => {
@@ -175,7 +222,7 @@ describe('worker debug payload redaction', () => {
         current.push(listener);
         listeners.set(name, current);
       },
-      wavewalletdkCall: async (method: string) => results.get(method),
+      wavewalletdkCall: async () => result,
     };
     vm.runInNewContext(source, {
       self,
@@ -192,6 +239,7 @@ describe('worker debug payload redaction', () => {
 
     for (const [i, c] of CASES.entries()) {
       logs.length = 0;
+      result = c.result;
       await onmessage({ data: { id: i, method: c.method, params: c.params } });
 
       assertNoSecrets(JSON.stringify(logs));

@@ -45,6 +45,9 @@ const SECRET_FIELDS = new Set([
   "seedentropy",
   "prfoutput",
   "descriptors",
+  "bundle",
+  "watchonlybundle",
+  "authkeys",
 ]);
 const REDACTED = "[REDACTED]";
 
