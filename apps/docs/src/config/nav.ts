@@ -74,6 +74,7 @@ export const NAV: NavGroup[] = [
       { slug: 'react-native/get-started/installation', label: 'Installation', section: 'react-native' },
       { slug: 'react-native/get-started/requirements', label: 'Requirements', section: 'react-native' },
       { slug: 'react-native/get-started/passkey-setup', label: 'Passkey setup', section: 'react-native' },
+      { slug: 'react-native/background-and-resume', label: 'Background and resume', section: 'react-native' },
       { slug: 'react-native/troubleshooting', label: 'Troubleshooting', section: 'react-native' },
     ],
   },

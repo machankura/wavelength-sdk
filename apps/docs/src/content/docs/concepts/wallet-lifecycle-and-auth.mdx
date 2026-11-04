@@ -34,6 +34,8 @@ Treat `'none'` and `'locked'` as non-spendable. Do not infer readiness from a su
 
 Use `getInfo()` / `useWalletInfo()` for the current wallet state, and `phaseFromInfo()` when you want a single enum for gating UI across the web and React Native transports. See the [wavelength-core reference](/reference/wavelength-core/) for **WalletEngine**, **WalletState**, and **RuntimePhase** definitions.
 
+A React Native app also has to restart the daemon after a real stay in the background, which returns an open wallet to `'locked'`. See [Background and resume](/react-native/background-and-resume/).
+
 ## Password vs passkey
 
 Both paths protect the same underlying wallet seed, but they derive the encryption key differently. Choose one at setup time; after unlock, the lifecycle is the same.

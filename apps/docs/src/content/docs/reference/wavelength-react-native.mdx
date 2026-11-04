@@ -52,6 +52,11 @@ export const nativePasskeyCeremonyOptionsSig = `type NativePasskeyCeremonyOption
 
 export const getDefaultDataDirSig = `function getDefaultDataDir(): Promise<string>;`;
 
+export const restartAfterBackgroundSig = `function restartAfterBackground(
+  engine: WalletEngine,
+  options?: RestartAfterBackgroundOptions,
+): () => void`;
+
 export const defaultConfigSig = `function defaultConfig(
   network: PresetNetwork,
   overrides?: Partial<RuntimeConfig>,
@@ -202,6 +207,30 @@ export default function Root() {
   return <WavelengthProvider engine={engine}>{/* your app */}</WavelengthProvider>;
 }
 ```
+
+</ApiSymbol>
+
+## App lifecycle
+
+<ApiSymbol name="restartAfterBackground" kind="function">
+
+Restarts the engine's daemon when the app returns from a real stay in the
+background, so an open wallet does not carry on over gRPC connections frozen on
+their old network path. An open wallet comes back on `'locked'`, and your unlock
+flow takes it from there; a wallet that is locked or not yet created is left alone.
+See [Background and resume](/react-native/background-and-resume/) for what your app
+must do.
+
+<Signature title="wavelength-react-native.d.ts" code={restartAfterBackgroundSig} />
+
+<ParamsTable rows={[
+  { name: 'engine', type: 'WalletEngine', desc: 'The engine to restart, usually from createNativeWalletEngine().' },
+  { name: 'options.minBackgroundMs', type: 'number', desc: "Optional. How long the app must stay in the background before returning restarts the daemon. Android reports another activity on top, such as a permission prompt, as 'background' too, so a brief visit should not cost an unlock. Default: 30000." },
+]} />
+
+<Returns type="() => void">
+Stops watching.
+</Returns>
 
 </ApiSymbol>
 

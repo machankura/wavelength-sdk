@@ -1,0 +1,94 @@
+---
+title: Background and resume
+description: What a React Native host must do when the app leaves the foreground and comes back, and what the SDK handles for it.
+pageLayout: doc
+---
+
+import Callout from '~/components/mdx/Callout.astro';
+
+The wallet daemon runs inside your app's process, and it cannot see the app's
+lifecycle. If you leave it running while the operating system suspends the
+process, its gRPC connections to the Wavelength servers stay frozen on their old
+network path, and the wallet carries on over them when the app returns. The daemon
+has to be stopped and started again to dial fresh ones. This is your app's job,
+because nothing below it knows the app was away.
+
+## What your app must do
+
+Call [`restartAfterBackground()`](/reference/wavelength-react-native/#restartAfterBackground)
+once, beside the engine:
+
+```tsx title="App.tsx"
+import {
+  createNativeWalletEngine,
+  restartAfterBackground,
+} from '@lightninglabs/wavelength-react-native';
+
+const engine = createNativeWalletEngine();
+
+restartAfterBackground(engine);
+```
+
+Then make sure the rest of your app copes with what a restart does:
+
+- **Render your unlock flow on `'locked'`.** An open wallet returns on `'locked'`,
+  with the same config and the same wallet. The SDK holds no password, so the
+  restart cannot finish the unlock for you. If your app stores a password or
+  prompts for a passkey by itself, this is where it does so.
+- **Keep your own state as long as the engine.** The phase moves through
+  `'stopping'`, `'stopped'` and `'starting'`, and the snapshot's info, balance and
+  activity are cleared. Anything your app must not lose, such as which wallet is
+  selected or a recovery phrase the user has not confirmed saving, belongs above
+  the screens those phases replace. On Android it has to outlive your React root
+  too: the Back key destroys the activity but not the process, so an engine at
+  module scope and its daemon carry on while component state starts over.
+- **Handle `'error'`.** If the daemon fails to stop in time or to start again, the
+  engine lands on `'error'` as it does for any failed `start()` or `stop()`. Offer
+  a retry that calls `start()`.
+- **Keep the unlock retryable.** An unlock needs the network, so a user who comes
+  back offline waits on it or sees it reject, with the wallet still on `'locked'`.
+  Show the daemon's message and let them try again.
+- **Check activity before repeating a payment.** A call in flight when the daemon
+  stops rejects, and for a payment that does not mean the payment failed. After
+  the unlock, look at the wallet's activity before offering to send again.
+
+## When it restarts
+
+| When the app returns | What happens |
+| --- | --- |
+| Away for less than 30 seconds | Nothing. Set `minBackgroundMs` to change this. |
+| `'ready'` or `'syncing'` | The daemon restarts and the wallet lands on `'locked'`. |
+| `'error'`, and the wallet was open when the app left | The daemon restarts: a lost connection is the likely cause. |
+| `'locked'`, `'needsWallet'`, or no wallet running | Nothing. No external connection is open, and the unlock dials fresh ones. |
+| A server-assisted recovery scan is running | Nothing. A stop would lose the scan's progress. |
+
+The 30 seconds exist because Android reports `'background'` whenever another
+activity is on top of yours, including permission prompts and file pickers. Those
+visits are not worth an unlock, and in that short a time the connections are still
+good. iOS's `'inactive'` does not count as leaving: it covers the app switcher and
+system sheets.
+
+<Callout type="note" title="Not automatic">
+The factory does not turn this on for you. A restart costs the user an unlock and
+can cancel work in flight, so your app should opt in knowing that, and should have
+an unlock screen to land on.
+</Callout>
+
+## If you handle it yourself
+
+Use [`engine.restart()`](/reference/wavelength-core/#WalletEngine) from your own
+`AppState` listener if you need different rules, for example to hold the restart
+while your app is waiting on a document picker. It stops the daemon and starts it
+with the config the last `start()` used.
+
+An app driving `createNativeClient()` without an engine has no `restart()`, so it
+calls `stop()` and then opens the wallet the way it first did. That includes
+[`startExternalSeedWallet()`](/reference/wavelength-react-native/#external-seed-startup),
+which the engine does not track, so `restartAfterBackground()` does nothing for a
+wallet opened that way.
+
+## Where this does not apply
+
+This page is for the React Native transport. The helper lives in that package
+because `AppState` does, and because only the native daemon dials the servers over
+gRPC; the web transport uses REST.

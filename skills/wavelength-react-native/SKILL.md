@@ -36,6 +36,7 @@ Check the npm registry for current versions; do not rely on memorized ones.
 | Passkey protection | https://wavelength.lightning.engineering/guides/use-a-passkey.md |
 | Restoring from a phrase or descriptors | https://wavelength.lightning.engineering/guides/restore-a-wallet.md |
 | Keys on a remote signer (watch-only) | https://wavelength.lightning.engineering/guides/use-a-remote-signer.md |
+| App background and resume | https://wavelength.lightning.engineering/react-native/background-and-resume.md |
 | Build or runtime failures | https://wavelength.lightning.engineering/react-native/troubleshooting.md |
 | Exact API surface | https://wavelength.lightning.engineering/reference/wavelength-react-native.md |
 
@@ -45,6 +46,10 @@ Check the npm registry for current versions; do not rely on memorized ones.
   wavelength-react-native and pass it to `<WavelengthProvider engine={...}>`.
   Build the engine once, outside the component tree (module scope), and
   inject the same instance on every render.
+- Call `restartAfterBackground(engine)` once beside the engine. The daemon cannot
+  see the app lifecycle, and left running through a suspension it keeps gRPC
+  connections frozen on their old network path. An open wallet returns on
+  `'locked'`, so the app must render its unlock flow for that phase.
 - Requires React Native 0.76 or newer, iOS 15.1+, and Android minSdk 24.
   The New Architecture must be enabled. This package is New Architecture
   only; it does not support the legacy architecture.
