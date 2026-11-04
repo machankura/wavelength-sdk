@@ -47,7 +47,10 @@ Then make sure the rest of your app copes with what a restart does:
   a retry that calls `start()`.
 - **Keep the unlock retryable.** An unlock needs the network, so a user who comes
   back offline waits on it or sees it reject, with the wallet still on `'locked'`.
-  Show the daemon's message and let them try again.
+  Show the daemon's message and let them try again. A watch-only wallet also needs
+  its signer on this unlock: the restart reuses its `remoteSigner*` settings, and
+  the daemon dials it afresh on each attempt, so see
+  [Handle a signer that is down](/guides/use-a-remote-signer/#handle-a-signer-that-is-down).
 - **Check activity before repeating a payment.** A call in flight when the daemon
   stops rejects, and for a payment that does not mean the payment failed. After
   the unlock, look at the wallet's activity before offering to send again.

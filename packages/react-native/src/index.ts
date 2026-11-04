@@ -69,8 +69,9 @@ export function createNativeWalletEngine(
  * that stops watching.
  *
  * The wallet comes back on 'locked', so the host must render its unlock flow for
- * that phase: the SDK holds no password. A wallet that is locked or not yet
- * created is left alone, as it holds no external connections.
+ * that phase: the SDK holds no password, and a watch-only wallet needs its remote
+ * signer on that unlock. A wallet that is locked or not yet created is left alone,
+ * as it holds no external connections.
  */
 export function restartAfterBackground(
   engine: WalletEngine,

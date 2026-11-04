@@ -131,6 +131,10 @@ for it. On a first open, the retry depends on the phase, as described under the
 first open above. The connect timeout is `remoteSignerConnectTimeoutSeconds`, so keep the unlock
 screen visibly busy for that long.
 
+A React Native app also meets this on returning from the background, because
+[`restartAfterBackground()`](/react-native/background-and-resume/) stops an open
+wallet and lands it back on the unlock screen. The signer's settings carry over.
+
 Anything that signs afterward needs the signer as well, including sends, Ark rounds
 without a minimal bundle, and server-assisted recovery.
 

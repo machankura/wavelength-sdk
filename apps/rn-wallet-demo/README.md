@@ -167,5 +167,6 @@ xxd -p -c0 ~/.wavesigner/signet/signer.macaroon
 
 Paste the macaroon as hex, `tls.cert` and the bundle into the form. The demo writes
 the macaroon and certificate under the wallet's data directory, and keeps the bundle
-only for the first open. The signer must be reachable on every open. The demo turns
+only for the first open. The signer must be reachable on every open, including the
+unlock after [a real stay in the background](#background-and-return). The demo turns
 Android backup off, because the macaroon grants signing.

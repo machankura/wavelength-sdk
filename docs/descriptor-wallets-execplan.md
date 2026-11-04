@@ -121,9 +121,10 @@ These were found while writing this plan, from reading the code on 2026-11-04.
 
 - Observation: Backgrounding is not handled, for any wallet kind. `docs/wavewalletdk_mobile.md` in
   `wavelength` says a host should call `Stop` and `Start` after a real background and resume, and neither
-  the demo nor `packages/react-native` does. Left alone as a separate gap, so acceptance item 4 was run by
-  stopping and reopening the wallet in the app rather than by backgrounding it.
-  Evidence: `grep -rn AppState apps/rn-wallet-demo/src packages/react-native/src` finds nothing.
+  the demo nor `packages/react-native` did. Left alone as a separate gap, so acceptance item 4 was first run
+  by stopping and reopening the wallet in the app. `restartAfterBackground` has since closed the gap, and item
+  4 was rerun by backgrounding: see Artifacts and Notes.
+  Evidence: `apps/docs/src/content/docs/react-native/background-and-resume.mdx`.
 
 - Observation: Settings showed the server as Offline during the signet emulator runs, and a credit balance
   call logged `DeadlineExceeded`. The cause was not investigated. Wallet opening did not depend on it, but
@@ -494,6 +495,10 @@ Android emulator, `Medium_Phone` image on API 36.1 in read-only mode, on signet,
     4. Signer stopped, wallet reopened              start ok; unlock fails after 35 s:
                                                     "connect to remote signer: ... context deadline
                                                     exceeded". Signer restarted, Unlock opens in 8 s
+       Same, rerun by backgrounding with the signer  home with the signer stopped, 33 s away, return:
+       stopped during the visit                      restart lands on unlock; unlock fails after 35 s:
+                                                     "connect to remote signer"; Unlock stays usable.
+                                                     Signer restarted, Unlock opens in 8 s, same identity
     5. Another signer's credentials                 refused: "signer does not hold the key for a
                                                     wallet slot: [onchain (not signed) 6 (wrong key)
                                                     42 (wrong key) ...]"

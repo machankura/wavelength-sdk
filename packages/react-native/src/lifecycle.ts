@@ -29,10 +29,10 @@ export type RestartAfterBackgroundOptions = {
 const DEFAULT_MIN_BACKGROUND_MS = 30_000;
 
 // Only an unlocked wallet holds external gRPC connections: the daemon dials the
-// operator, the mailbox and the indexer on unlock. A wallet still locked or not
-// yet created has nothing frozen and can stay as it is, which also keeps a
-// restart from pulling a passkey prompt or an onboarding form out from under the
-// user.
+// operator, the mailbox and the indexer on unlock, and a remote signer on every
+// open attempt. A wallet still locked or not yet created has nothing frozen and
+// can stay as it is, which also keeps a restart from pulling a passkey prompt or
+// an onboarding form out from under the user.
 const OPEN_PHASES: ReadonlySet<RuntimePhase> = new Set(['syncing', 'ready']);
 
 // watchBackground is restartAfterBackground over an injected AppState.
