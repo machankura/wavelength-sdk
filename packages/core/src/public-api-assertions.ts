@@ -35,6 +35,9 @@ import type {
   ExternalSeedWalletRequest,
   ListWalletDescriptorsRequest,
   ListWalletDescriptorsResult,
+  WatchOnlyWalletClient,
+  WatchOnlyWalletOpenResult,
+  WatchOnlyWalletRequest,
   FacadeMethod,
   OnchainHistory,
   OnchainTx,
@@ -80,6 +83,9 @@ void (null as unknown as DescriptorWalletOpenResult);
 void (null as unknown as DescriptorWalletRequest);
 void (null as unknown as ListWalletDescriptorsRequest);
 void (null as unknown as ListWalletDescriptorsResult);
+void (null as unknown as WatchOnlyWalletClient);
+void (null as unknown as WatchOnlyWalletOpenResult);
+void (null as unknown as WatchOnlyWalletRequest);
 void (null as unknown as EntryFailureCode);
 void (null as unknown as EntryProgress);
 void (null as unknown as EntryRequest);
@@ -117,3 +123,11 @@ const _descriptorClientIsLegacy: WavelengthClient =
 void _legacyClientHasNoDescriptorStart;
 void _legacyClientHasNoDescriptorExport;
 void _descriptorClientIsLegacy;
+
+// Watch-only startup is additive too.
+const _legacyClientHasNoWatchOnlyStart:
+  'startWatchOnlyWallet' extends keyof WavelengthClient ? false : true = true;
+const _watchOnlyClientIsLegacy: WavelengthClient =
+  null as unknown as WatchOnlyWalletClient;
+void _legacyClientHasNoWatchOnlyStart;
+void _watchOnlyClientIsLegacy;

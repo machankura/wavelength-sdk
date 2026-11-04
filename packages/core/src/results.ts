@@ -37,6 +37,12 @@ export type DescriptorWalletOpenResult = ExternalSeedWalletOpenResult & {
   descriptors: string[];
 };
 
+/** Result of atomically starting and opening a watch-only daemon wallet. */
+export type WatchOnlyWalletOpenResult = DescriptorWalletOpenResult & {
+  /** The hash of the manifest the wallet was created from; empty for a bundle. */
+  manifestHash: string;
+};
+
 /**
  * Augments the wire send shape with `paymentHash`, the canonical place to read
  * a Lightning payment hash for a send. The daemon returns it from prepareSend

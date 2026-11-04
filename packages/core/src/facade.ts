@@ -5,6 +5,7 @@ import type {
   ExternalSeedWalletRequest,
   ListWalletDescriptorsRequest,
   UnlockWalletRequest,
+  WatchOnlyWalletRequest,
 } from './requests.ts';
 import { WavelengthError } from './errors.ts';
 
@@ -16,6 +17,7 @@ export const FACADE_METHODS = [
   'start',
   'startExternalSeedWallet',
   'startDescriptorWallet',
+  'startWatchOnlyWallet',
   'stop',
   'getInfo',
   'status',
@@ -96,6 +98,11 @@ export type MobileConfig = {
   max_payment_cltv?: number;
   signing_workers?: number;
   buffer_size?: number;
+  remote_signer_rpc_host?: string;
+  remote_signer_macaroon_path?: string;
+  remote_signer_tls_cert_path?: string;
+  remote_signer_connect_timeout_seconds?: number;
+  remote_signer_request_timeout_seconds?: number;
 };
 
 /**
@@ -119,6 +126,24 @@ export type ExternalSeedWalletStartParams = {
 export type DescriptorWalletStartParams = {
   config: MobileConfig;
   descriptors: string[];
+  birthday_unix?: number;
+  expected_identity_pubkey?: string;
+  recover_state?: boolean;
+  recovery_window?: number;
+};
+
+/**
+ * Private mobile transport envelope for the typed watch-only wallet lifecycle.
+ * Hosts use `WatchOnlyWalletClient.startWatchOnlyWallet()` instead of
+ * constructing it.
+ */
+export type WatchOnlyWalletStartParams = {
+  config: MobileConfig;
+  bundle?: string;
+  manifest?: string;
+  auth_keys?: string;
+  override_identity?: boolean;
+  wallet_password: string;
   birthday_unix?: number;
   expected_identity_pubkey?: string;
   recover_state?: boolean;
@@ -166,6 +191,13 @@ export function toMobileConfig(
     max_payment_cltv: config.maxPaymentCLTV,
     signing_workers: config.signingWorkers,
     buffer_size: config.bufferSize,
+    remote_signer_rpc_host: config.remoteSignerRpcHost,
+    remote_signer_macaroon_path: config.remoteSignerMacaroonPath,
+    remote_signer_tls_cert_path: config.remoteSignerTlsCertPath,
+    remote_signer_connect_timeout_seconds:
+      config.remoteSignerConnectTimeoutSeconds,
+    remote_signer_request_timeout_seconds:
+      config.remoteSignerRequestTimeoutSeconds,
   };
 
   // Leaving the swap server address unset disables the swap subsystem, so omit
@@ -211,6 +243,28 @@ export function toDescriptorWalletStartParams(
   return {
     config: toMobileConfig(config, serverTransport),
     descriptors: [...req.descriptors],
+    birthday_unix: req.birthday
+      ? Math.floor(req.birthday.getTime() / 1000)
+      : undefined,
+    expected_identity_pubkey: req.expectedIdentityPubKey,
+    recover_state: req.recoverState,
+    recovery_window: req.recoveryWindow,
+  };
+}
+
+/** Maps the typed watch-only request onto the private facade envelope. */
+export function toWatchOnlyWalletStartParams(
+  config: RuntimeConfig,
+  req: WatchOnlyWalletRequest,
+  serverTransport: ServerTransport,
+): WatchOnlyWalletStartParams {
+  return {
+    config: toMobileConfig(config, serverTransport),
+    bundle: req.bundle,
+    manifest: req.manifest,
+    auth_keys: req.authKeys,
+    override_identity: req.overrideIdentity,
+    wallet_password: base64FromUtf8(req.walletPassword),
     birthday_unix: req.birthday
       ? Math.floor(req.birthday.getTime() / 1000)
       : undefined,

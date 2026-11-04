@@ -40,6 +40,15 @@ it('normalizes every array result family', () => {
     { imported: true, descriptors: [] },
   );
   assert.deepEqual(
+    normalizeFacadeResult('startWatchOnlyWallet', {
+      Imported: true,
+      ManifestHash: 'abc',
+      Descriptors: null,
+      Mnemonic: ['must', 'not', 'escape'],
+    }),
+    { imported: true, manifestHash: 'abc', descriptors: [] },
+  );
+  assert.deepEqual(
     normalizeFacadeResult('listWalletDescriptors', { Descriptors: null }),
     { descriptors: [] },
   );

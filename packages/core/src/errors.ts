@@ -25,8 +25,9 @@
  * `'asset_load_failed'` cover a downloaded, verified module that fails to
  * compile, which is not an asset problem and surfaces as `'wavelength_error'`
  * too. `'invalid_external_seed'` means an external-seed wallet request failed
- * local validation, and `'invalid_descriptor'` the same for a descriptor
- * wallet request. `'runtime_active'` means the client already has a runtime
+ * local validation, `'invalid_descriptor'` the same for a descriptor wallet
+ * request, and `'invalid_watch_only'` for a watch-only wallet request.
+ * `'runtime_active'` means the client already has a runtime
  * active and must stop it before selecting another external-seed profile.
  * The `(string & {})` arm keeps the union open for forward
  * compatibility while still offering autocomplete on the known codes.
@@ -44,6 +45,7 @@ export type WavelengthErrorCode =
   | 'invalid_config'
   | 'invalid_external_seed'
   | 'invalid_descriptor'
+  | 'invalid_watch_only'
   | 'runtime_active'
   | (string & {});
 

@@ -133,6 +133,26 @@ export type RuntimeConfig = {
   signingWorkers?: number;
   /** Bufconn listener buffer size override. Must be a nonnegative safe integer. */
   bufferSize?: number;
+  /**
+   * The `host:port` of the remote signer that holds a watch-only wallet's fund
+   * keys. The web transport rejects it, because a browser runtime cannot dial
+   * the signer. See `WatchOnlyWalletClient.startWatchOnlyWallet()`.
+   */
+  remoteSignerRpcHost?: string;
+  /** Filesystem path to the macaroon the remote signer issued for this wallet. */
+  remoteSignerMacaroonPath?: string;
+  /** Filesystem path to the remote signer's TLS certificate. */
+  remoteSignerTlsCertPath?: string;
+  /**
+   * How long to wait for the remote signer to connect, in seconds. Zero or
+   * unset selects the daemon default. Must be a nonnegative safe integer.
+   */
+  remoteSignerConnectTimeoutSeconds?: number;
+  /**
+   * How long each signing request may take, in seconds. Zero or unset selects
+   * the daemon default. Must be a nonnegative safe integer.
+   */
+  remoteSignerRequestTimeoutSeconds?: number;
 };
 
 const lwwalletOnly = [
@@ -152,6 +172,15 @@ const numericFields = [
   'maxPaymentCLTV',
   'signingWorkers',
   'bufferSize',
+  'remoteSignerConnectTimeoutSeconds',
+  'remoteSignerRequestTimeoutSeconds',
+] as const;
+const remoteSignerFields = [
+  'remoteSignerRpcHost',
+  'remoteSignerMacaroonPath',
+  'remoteSignerTlsCertPath',
+  'remoteSignerConnectTimeoutSeconds',
+  'remoteSignerRequestTimeoutSeconds',
 ] as const;
 
 function invalidConfig(message: string): never {
@@ -213,6 +242,20 @@ export function validateRuntimeConfig(
     config.swapServerTlsCertPath !== undefined
   ) {
     invalidConfig('swapServerTlsCertPath is unavailable on the web transport');
+  }
+  const remoteSignerField = remoteSignerFields.find(
+    (field) => config[field] !== undefined,
+  );
+  if (remoteSignerField === undefined) {
+    return;
+  }
+  if (transport === 'rest') {
+    invalidConfig(`${remoteSignerField} is unavailable on the web transport`);
+  }
+  // The daemon ignores the other fields without a host, so a config that forgot
+  // it would otherwise start a wallet with no signer.
+  if (!config.remoteSignerRpcHost) {
+    invalidConfig(`${remoteSignerField} requires remoteSignerRpcHost`);
   }
 }
 

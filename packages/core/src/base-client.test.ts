@@ -45,6 +45,7 @@ describe('BaseWavelengthClient', () => {
         method === 'start' ||
         method === 'startExternalSeedWallet' ||
         method === 'startDescriptorWallet' ||
+        method === 'startWatchOnlyWallet' ||
         method === 'stop'
       ) {
         continue;
@@ -72,6 +73,10 @@ describe('BaseWavelengthClient', () => {
       [
         'startDescriptorWallet',
         'DescriptorWalletClient.startDescriptorWallet()',
+      ],
+      [
+        'startWatchOnlyWallet',
+        'WatchOnlyWalletClient.startWatchOnlyWallet()',
       ],
       ['stop', 'stop()'],
     ] as const;
@@ -291,6 +296,155 @@ describe('BaseWavelengthClient', () => {
     assert.equal(
       client.calls.some((call) => call.method === 'startDescriptorWallet'),
       false,
+    );
+  });
+
+  const watchOnlyConfig = {
+    network: 'regtest',
+    dataDir: '/wallets',
+    arkServerAddress: 'h:7070',
+    remoteSignerRpcHost: 'signer:10009',
+    remoteSignerMacaroonPath: '/signer/admin.macaroon',
+    remoteSignerTlsCertPath: '/signer/tls.cert',
+  } as const;
+
+  it('maps watch-only startup to the private snake-case envelope', async () => {
+    const client = new FakeClient();
+    client.responses.set('startWatchOnlyWallet', {
+      Imported: true,
+      IdentityPubKey: 'identity',
+      RootFingerprint: 'd34db33f',
+      ManifestHash: 'abc123',
+      Descriptors: null,
+      Mnemonic: ['must', 'not', 'escape'],
+    });
+    const result = await client.startWatchOnlyWallet(
+      {
+        ...watchOnlyConfig,
+        remoteSignerConnectTimeoutSeconds: 30,
+        remoteSignerRequestTimeoutSeconds: 0,
+      },
+      {
+        manifest: '{"version":1}',
+        authKeys: 'keys',
+        overrideIdentity: true,
+        walletPassword: 'hunter2',
+        birthday: new Date('2026-01-01T00:00:00Z'),
+        expectedIdentityPubKey: 'identity',
+        recoverState: true,
+        recoveryWindow: 99,
+      },
+    );
+
+    assert.deepEqual(client.calls[0], {
+      method: 'startWatchOnlyWallet',
+      params: {
+        config: {
+          data_dir: '/wallets',
+          network: 'regtest',
+          server_address: 'h:7070',
+          server_transport: 'grpc',
+          swap_server_transport: 'grpc',
+          wallet_type: 'lwwallet',
+          remote_signer_rpc_host: 'signer:10009',
+          remote_signer_macaroon_path: '/signer/admin.macaroon',
+          remote_signer_tls_cert_path: '/signer/tls.cert',
+          remote_signer_connect_timeout_seconds: 30,
+          remote_signer_request_timeout_seconds: 0,
+        },
+        bundle: undefined,
+        manifest: '{"version":1}',
+        auth_keys: 'keys',
+        override_identity: true,
+        wallet_password: Buffer.from('hunter2').toString('base64'),
+        birthday_unix: 1767225600,
+        expected_identity_pubkey: 'identity',
+        recover_state: true,
+        recovery_window: 99,
+      },
+    });
+    assert.equal(result.identityPubKey, 'identity');
+    assert.equal(result.manifestHash, 'abc123');
+    assert.deepEqual(result.descriptors, []);
+    assert.equal(Object.hasOwn(result, 'mnemonic'), false);
+  });
+
+  it('rejects invalid watch-only requests before dispatch', async () => {
+    const client = new FakeClient();
+    const walletPassword = 'hunter2';
+    for (const req of [
+      { walletPassword: '', bundle: 'b' },
+      { walletPassword },
+      { walletPassword, bundle: '' },
+      { walletPassword, bundle: 'b', manifest: 'm', authKeys: 'k' },
+      { walletPassword, manifest: 'm' },
+      { walletPassword, bundle: 'b', authKeys: 'k' },
+      { walletPassword, bundle: 'b', overrideIdentity: false },
+      { walletPassword, bundle: 'b', birthday: new Date('not a date') },
+      { walletPassword, bundle: 'b', recoveryWindow: -1 },
+      { walletPassword, bundle: 'b', expectedIdentityPubKey: '' },
+    ]) {
+      await assert.rejects(
+        client.startWatchOnlyWallet(watchOnlyConfig, req),
+        (err: WavelengthError) => err.code === 'invalid_watch_only',
+      );
+    }
+    assert.equal(client.calls.length, 0);
+  });
+
+  it('rejects a watch-only config without a data dir or signer', async () => {
+    const client = new FakeClient();
+    const req = { walletPassword: 'hunter2', bundle: 'b' };
+    for (const config of [
+      { ...watchOnlyConfig, dataDir: undefined },
+      { ...watchOnlyConfig, dataDir: ' ' },
+      { ...watchOnlyConfig, remoteSignerRpcHost: undefined },
+      { ...watchOnlyConfig, remoteSignerMacaroonPath: undefined },
+      { ...watchOnlyConfig, remoteSignerTlsCertPath: undefined },
+      { ...watchOnlyConfig, remoteSignerConnectTimeoutSeconds: -1 },
+    ]) {
+      await assert.rejects(
+        client.startWatchOnlyWallet(config, req),
+        (err: WavelengthError) => err.code === 'invalid_config',
+      );
+    }
+    assert.equal(client.calls.length, 0);
+  });
+
+  it('refuses a remote signer on the web transport', async () => {
+    class RestClient extends FakeClient {
+      protected override readonly serverTransport = 'rest' as never;
+    }
+    const client = new RestClient();
+
+    // The verb refuses before looking at the config, so a web host learns the
+    // transport is the problem and not a missing field.
+    await assert.rejects(
+      client.startWatchOnlyWallet(
+        { network: 'regtest' },
+        { walletPassword: 'hunter2', bundle: 'b' },
+      ),
+      (err: WavelengthError) =>
+        err.code === 'invalid_config' && err.message.includes('web transport'),
+    );
+    await assert.rejects(
+      client.start({ ...watchOnlyConfig }),
+      (err: WavelengthError) =>
+        err.code === 'invalid_config' && err.message.includes('web transport'),
+    );
+    assert.equal(client.calls.length, 0);
+  });
+
+  it('rejects remote signer settings without a host', async () => {
+    const client = new FakeClient();
+    await assert.rejects(
+      client.start({
+        network: 'regtest',
+        remoteSignerMacaroonPath: '/signer/admin.macaroon',
+      }),
+      (err: WavelengthError) =>
+        err.code === 'invalid_config' &&
+        err.message.includes('remoteSignerRpcHost'),
     );
   });
 

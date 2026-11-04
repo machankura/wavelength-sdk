@@ -88,6 +88,41 @@ export type DescriptorWalletRequest = {
   recoveryWindow?: number;
 };
 
+/**
+ * Opens one daemon wallet whose fund keys live on a remote signer. Exactly one
+ * of `bundle` and `manifest` is required, on every open: it is imported into an
+ * empty profile and, on later opens, pins the identity the wallet must have.
+ */
+export type WatchOnlyWalletRequest = {
+  /**
+   * The signer's export, from `wavesigner export-watchonly`. A minimal bundle
+   * holds the authentication private keys.
+   */
+  bundle?: string;
+  /** The JSON manifest of a signer with per-slot key overrides. */
+  manifest?: string;
+  /** The authentication private keys that go with `manifest`. */
+  authKeys?: string;
+  /** Allows a manifest that replaces the identity family's key. */
+  overrideIdentity?: boolean;
+  /**
+   * Protects the wallet database and any authentication keys it keeps. A
+   * watch-only wallet has no seed to derive it from, so the host supplies it.
+   */
+  walletPassword: string;
+  /** The earliest date the keys may have received funds; omit to scan from genesis. */
+  birthday?: Date;
+  /**
+   * The identity public key observed on a previous open. The daemon also always
+   * checks the opened wallet against the identity the bundle or manifest implies.
+   */
+  expectedIdentityPubKey?: string;
+  /** Runs the daemon's state-recovery scan for this open operation. */
+  recoverState?: boolean;
+  /** Recovery look-ahead for each address family; must fit in a uint32. */
+  recoveryWindow?: number;
+};
+
 /** Validates a descriptor wallet request before startup. */
 export function validateDescriptorWalletRequest(
   req: DescriptorWalletRequest,
@@ -102,6 +137,56 @@ export function validateDescriptorWalletRequest(
       'invalid_descriptor',
     );
   }
+  validateImportOptions(req, 'invalid_descriptor');
+}
+
+/** Validates a watch-only wallet request before startup. */
+export function validateWatchOnlyWalletRequest(
+  req: WatchOnlyWalletRequest,
+): void {
+  const invalid = (message: string) =>
+    new WavelengthError(message, 'invalid_watch_only');
+
+  if (typeof req.walletPassword !== 'string' || req.walletPassword === '') {
+    throw invalid('walletPassword must be a nonempty string');
+  }
+  for (const field of ['bundle', 'manifest', 'authKeys'] as const) {
+    const value = req[field];
+    if (value !== undefined && (typeof value !== 'string' || value === '')) {
+      throw invalid(`${field} must be a nonempty string`);
+    }
+  }
+  if ((req.bundle === undefined) === (req.manifest === undefined)) {
+    throw invalid('exactly one of bundle and manifest is required');
+  }
+  if (req.manifest !== undefined && req.authKeys === undefined) {
+    throw invalid('a manifest requires its authKeys');
+  }
+  if (
+    req.overrideIdentity !== undefined &&
+    typeof req.overrideIdentity !== 'boolean'
+  ) {
+    throw invalid('overrideIdentity must be a boolean');
+  }
+  if (
+    req.bundle !== undefined &&
+    (req.authKeys !== undefined || req.overrideIdentity !== undefined)
+  ) {
+    throw invalid('authKeys and overrideIdentity apply only to a manifest');
+  }
+  validateImportOptions(req, 'invalid_watch_only');
+}
+
+// The options a wallet opened from imported keys shares across lifecycles.
+function validateImportOptions(
+  req: {
+    birthday?: Date;
+    expectedIdentityPubKey?: string;
+    recoverState?: boolean;
+    recoveryWindow?: number;
+  },
+  code: 'invalid_descriptor' | 'invalid_watch_only',
+): void {
   if (
     req.birthday !== undefined &&
     (!(req.birthday instanceof Date) || Number.isNaN(req.birthday.getTime()) ||
@@ -109,7 +194,7 @@ export function validateDescriptorWalletRequest(
   ) {
     throw new WavelengthError(
       'birthday must be a valid Date at or after the Unix epoch',
-      'invalid_descriptor',
+      code,
     );
   }
   if (
@@ -119,13 +204,13 @@ export function validateDescriptorWalletRequest(
   ) {
     throw new WavelengthError(
       'expectedIdentityPubKey must be a nonempty string',
-      'invalid_descriptor',
+      code,
     );
   }
   if (req.recoverState !== undefined && typeof req.recoverState !== 'boolean') {
     throw new WavelengthError(
       'recoverState must be a boolean',
-      'invalid_descriptor',
+      code,
     );
   }
   if (
@@ -136,7 +221,7 @@ export function validateDescriptorWalletRequest(
   ) {
     throw new WavelengthError(
       'recoveryWindow must be an integer that fits in uint32',
-      'invalid_descriptor',
+      code,
     );
   }
 }

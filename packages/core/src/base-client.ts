@@ -14,10 +14,12 @@ import type {
   SendRequest,
   SweepWalletRequest,
   UnlockWalletRequest,
+  WatchOnlyWalletRequest,
 } from './requests.ts';
 import {
   validateDescriptorWalletRequest,
   validateExternalSeedWalletRequest,
+  validateWatchOnlyWalletRequest,
 } from './requests.ts';
 import type {
   Balance,
@@ -37,11 +39,13 @@ import type {
   SendResult,
   SweepWalletResult,
   UnlockWalletResult,
+  WatchOnlyWalletOpenResult,
 } from './results.ts';
 import { validateRuntimeConfig, type RuntimeConfig } from './config.ts';
 import type {
   DescriptorWalletClient,
   ExternalSeedWalletClient,
+  WatchOnlyWalletClient,
 } from './client.ts';
 import type { WavelengthEvent, WavelengthListener } from './events.ts';
 import type { WalletInfo, WalletStatus } from './state.ts';
@@ -54,6 +58,7 @@ import {
   toGoListWalletDescriptorsReq,
   toGoUnlockWalletReq,
   toMobileConfig,
+  toWatchOnlyWalletStartParams,
 } from './facade.ts';
 import { WavelengthError, errorMessage } from './errors.ts';
 import type { Entry } from './generated.ts';
@@ -77,7 +82,10 @@ import {
  * separate synchronization points.
  */
 export abstract class BaseWavelengthClient
-  implements ExternalSeedWalletClient, DescriptorWalletClient {
+  implements
+    ExternalSeedWalletClient,
+    DescriptorWalletClient,
+    WatchOnlyWalletClient {
   protected readonly listeners = new Set<WavelengthListener>();
 
   // Serializes runtime lifecycle operations for transports that route start and
@@ -100,9 +108,8 @@ export abstract class BaseWavelengthClient
   protected abstract readonly serverTransport: ServerTransport;
 
   // The raw facade escape hatch rejects start, startExternalSeedWallet,
-  // startDescriptorWallet, and stop so they can only run through typed
-  // lifecycle methods. Those are where
-  // web transports take and release the cross-tab runtime lock; a raw call
+  // startDescriptorWallet, startWatchOnlyWallet, and stop so they can only run
+  // through typed lifecycle methods. Those are where web transports take and release the cross-tab runtime lock; a raw call
   // would bypass it. Typed methods dispatch through callFacadeInternal instead.
   async callFacade<T = unknown>(
     method: FacadeMethod,
@@ -112,13 +119,16 @@ export abstract class BaseWavelengthClient
       method === 'start' ||
       method === 'startExternalSeedWallet' ||
       method === 'startDescriptorWallet' ||
+      method === 'startWatchOnlyWallet' ||
       method === 'stop'
     ) {
       const typedCall = method === 'startExternalSeedWallet'
         ? 'ExternalSeedWalletClient.startExternalSeedWallet()'
         : method === 'startDescriptorWallet'
           ? 'DescriptorWalletClient.startDescriptorWallet()'
-          : `${method}()`;
+          : method === 'startWatchOnlyWallet'
+            ? 'WatchOnlyWalletClient.startWatchOnlyWallet()'
+            : `${method}()`;
       throw new WavelengthError(
         `Call ${typedCall} instead of callFacade('${method}'): the ` +
           `${method} lifecycle verb runs through the typed method, which ` +
@@ -220,6 +230,43 @@ export abstract class BaseWavelengthClient
     return this.callFacadeInternal<DescriptorWalletOpenResult>(
       'startDescriptorWallet',
       toDescriptorWalletStartParams(config, req, this.serverTransport),
+    );
+  }
+
+  async startWatchOnlyWallet(
+    config: RuntimeConfig,
+    req: WatchOnlyWalletRequest,
+  ): Promise<WatchOnlyWalletOpenResult> {
+    if (this.serverTransport === 'rest') {
+      throw new WavelengthError(
+        'startWatchOnlyWallet is unavailable on the web transport: a browser ' +
+          'runtime cannot dial a remote signer',
+        'invalid_config',
+      );
+    }
+    validateRuntimeConfig(config, this.serverTransport);
+    validateWatchOnlyWalletRequest(req);
+    if (typeof config.dataDir !== 'string' || config.dataDir.trim() === '') {
+      throw new WavelengthError(
+        'startWatchOnlyWallet requires a final nonempty config.dataDir',
+        'invalid_config',
+      );
+    }
+    if (
+      !config.remoteSignerRpcHost ||
+      !config.remoteSignerMacaroonPath ||
+      !config.remoteSignerTlsCertPath
+    ) {
+      throw new WavelengthError(
+        'startWatchOnlyWallet requires remoteSignerRpcHost, ' +
+          'remoteSignerMacaroonPath and remoteSignerTlsCertPath',
+        'invalid_config',
+      );
+    }
+
+    return this.callFacadeInternal<WatchOnlyWalletOpenResult>(
+      'startWatchOnlyWallet',
+      toWatchOnlyWalletStartParams(config, req, this.serverTransport),
     );
   }
 

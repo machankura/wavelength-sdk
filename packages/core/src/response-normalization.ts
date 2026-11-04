@@ -62,8 +62,9 @@ export function normalizeFacadeResult<T = unknown>(
     } as T;
   case 'openWalletFromPasskey':
     return { ...result, mnemonic: nilSlice(result.mnemonic) } as T;
-  case 'startDescriptorWallet': {
-    // Descriptor wallets have no mnemonic; strip it defensively, as for
+  case 'startDescriptorWallet':
+  case 'startWatchOnlyWallet': {
+    // These wallets have no mnemonic; strip it defensively, as for
     // external-seed wallets, and give descriptors an array shape.
     const sanitized: Record<string, unknown> = {
       ...result,

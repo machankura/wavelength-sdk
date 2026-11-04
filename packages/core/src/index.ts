@@ -62,11 +62,13 @@ export type {
   SendRequest,
   SweepWalletRequest,
   UnlockWalletRequest,
+  WatchOnlyWalletRequest,
 } from './requests.ts';
 export {
   FORCE_UNROLL_ACK,
   validateDescriptorWalletRequest,
   validateExternalSeedWalletRequest,
+  validateWatchOnlyWalletRequest,
 } from './requests.ts';
 export type { ActivityStreamOptions } from './activity-options.ts';
 
@@ -112,6 +114,7 @@ export type {
   SendResult,
   SweepWalletResult,
   UnlockWalletResult,
+  WatchOnlyWalletOpenResult,
   VTXOInventory,
   WalletVTXO,
   WalletSweepInput,
@@ -182,10 +185,12 @@ export type {
 } from './exit.ts';
 
 // The stable client contract every transport implements, plus the additive
-// capabilities used by caller-owned external-seed and descriptor startup.
+// capabilities used by caller-owned external-seed, descriptor and watch-only
+// startup.
 export type {
   DescriptorWalletClient,
   ExternalSeedWalletClient,
+  WatchOnlyWalletClient,
   WavelengthClient,
 } from './client.ts';
 

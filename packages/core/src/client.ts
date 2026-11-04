@@ -19,6 +19,7 @@ import type {
   SendRequest,
   SweepWalletRequest,
   UnlockWalletRequest,
+  WatchOnlyWalletRequest,
 } from './requests.ts';
 import type {
   Balance,
@@ -38,6 +39,7 @@ import type {
   SendResult,
   SweepWalletResult,
   UnlockWalletResult,
+  WatchOnlyWalletOpenResult,
 } from './results.ts';
 
 /**
@@ -186,4 +188,25 @@ export interface DescriptorWalletClient extends WavelengthClient {
   listWalletDescriptors(
     req?: ListWalletDescriptorsRequest,
   ): Promise<ListWalletDescriptorsResult>;
+}
+
+/**
+ * Additive client capability for wallets whose fund keys live on a remote
+ * signer. Official React Native clients can use it; on the web transport it
+ * always rejects, because a browser runtime cannot dial the signer. Custom
+ * clients can keep implementing {@link WavelengthClient} unless they need
+ * watch-only startup.
+ */
+export interface WatchOnlyWalletClient extends WavelengthClient {
+  /**
+   * Atomically starts the daemon at the final configured profile and imports
+   * or unlocks a watch-only wallet from a signer's bundle or manifest. The
+   * config must name the signer (`remoteSignerRpcHost` and its credentials),
+   * and the signer must answer a challenge on every start. This is a lifecycle
+   * operation: call {@link stop} before selecting another wallet.
+   */
+  startWatchOnlyWallet(
+    config: RuntimeConfig,
+    req: WatchOnlyWalletRequest,
+  ): Promise<WatchOnlyWalletOpenResult>;
 }
