@@ -7,12 +7,17 @@ import {
   useWalletRestore,
 } from '@lightninglabs/wavelength-react';
 import type { WalletKind } from '@lightninglabs/wavelength-react';
+import { errorMessage } from '../../lib/errors';
 import { passkeyCeremony } from '../../lib/passkeyCeremony';
 import { loadWallets } from '../../lib/walletRegistry';
 import { WalletMode } from '../../components/ui/WalletTypePicker';
 import { CreateWalletScreen } from './CreateWalletScreen';
 import { LoadingScreen } from './LoadingScreen';
-import { RestoreWalletScreen } from './RestoreWalletScreen';
+import { RestoreWalletScreen, type RestoreArgs } from './RestoreWalletScreen';
+import {
+  WatchOnlyWalletScreen,
+  type WatchOnlyWalletArgs,
+} from './WatchOnlyWalletScreen';
 
 // passkeyName labels a freshly created passkey with the wallet's user-chosen
 // name plus a timestamp, so wallets stay distinguishable in the OS prompt.
@@ -41,10 +46,11 @@ export function OnboardingFlow({
   onWalletCreated,
   onWalletRestored,
   onWalletUnlocked,
+  onWatchOnlyLeftLocked,
   onBack,
 }: {
   network: string;
-  mode: 'create' | 'restore';
+  mode: 'create' | 'restore' | 'watchOnly';
   walletName: string;
   onWalletCreated: (
     mnemonic: string[],
@@ -52,8 +58,10 @@ export function OnboardingFlow({
     credentialId?: string,
   ) => void;
   /** Called once a phrase restore has brought the wallet up. */
-  onWalletRestored: () => void;
+  onWalletRestored: (kind: WalletKind) => void;
   onWalletUnlocked: (kind: WalletKind, credentialId?: string) => void;
+  /** Called when a failed watch-only open still left a wallet to unlock. */
+  onWatchOnlyLeftLocked: (message: string) => void;
   /** Stops the runtime and returns to the wallet list. */
   onBack: () => void;
 }) {
@@ -76,7 +84,13 @@ export function OnboardingFlow({
     return (
       <LoadingScreen
         network={network}
-        title={mode === 'create' ? 'Create wallet' : 'Restore wallet'}
+        title={
+          mode === 'create'
+            ? 'Create wallet'
+            : mode === 'watchOnly'
+              ? 'Watch-only wallet'
+              : 'Restore wallet'
+        }
         sub="Checking device capabilities."
       />
     );
@@ -175,21 +189,26 @@ export function OnboardingFlow({
   // the entry unstamped, so the needsWallet fallback re-renders this restore
   // form (with the snapshot's preserved failure) instead of treating the
   // entry as an existing wallet whose data went missing.
-  async function restorePasswordWallet(args: {
-    password: string;
-    mnemonic: string[];
-    passphrase: string;
-    recoverState: boolean;
-    recoveryWindow?: number;
-  }) {
+  async function restorePasswordWallet(args: RestoreArgs) {
+    const options = {
+      password: args.password,
+      recoverState: args.recoverState,
+      recoveryWindow: args.recoveryWindow,
+    };
     try {
-      await restore({
-        password: args.password,
-        mnemonic: args.mnemonic,
-        seedPassphrase: args.passphrase || undefined,
-        recoverState: args.recoverState,
-        recoveryWindow: args.recoveryWindow,
-      });
+      await restore(
+        args.source === 'descriptors'
+          ? {
+              ...options,
+              descriptors: args.descriptors,
+              birthday: args.birthday,
+            }
+          : {
+              ...options,
+              mnemonic: args.mnemonic,
+              seedPassphrase: args.passphrase || undefined,
+            },
+      );
     } catch {
       // Surfaced via restoreError while this form is still mounted, and via
       // restoreFailure once the phase falls back and remounts it.
@@ -197,17 +216,33 @@ export function OnboardingFlow({
     }
     // Outside the try: a throwing storage write in onWalletRestored must not
     // be swallowed by the restore's own catch.
-    onWalletRestored();
+    onWalletRestored(args.source === 'descriptors' ? 'descriptor' : 'password');
   }
 
-  function onRestore(args: {
-    password: string;
-    mnemonic: string[];
-    passphrase: string;
-    recoverState: boolean;
-    recoveryWindow?: number;
-  }) {
+  function onRestore(args: RestoreArgs) {
     void restorePasswordWallet(args);
+  }
+
+  // createWatchOnlyWallet makes the first open of a wallet whose keys live on
+  // a remote signer. It has no mnemonic, so there is no backup step.
+  async function createWatchOnlyWallet(args: WatchOnlyWalletArgs) {
+    try {
+      await create(args);
+    } catch (err) {
+      // The daemon creates the database before it checks the signer's keys, so
+      // failing on them leaves a locked wallet: the engine has moved on, this form
+      // is about to unmount, and the retry is an unlock. Any other failure,
+      // including a signer it could not reach, stays here via createError, and
+      // creating again works.
+      if (engine.getSnapshot().phase === 'locked') {
+        onWatchOnlyLeftLocked(errorMessage(err));
+      }
+
+      return;
+    }
+    // Outside the try: a throwing storage write in onWalletCreated must not be
+    // swallowed by the create's own catch.
+    onWalletCreated([], 'watchOnly');
   }
 
   // onRestorePasskey opens a wallet from a discoverable passkey that has
@@ -272,6 +307,18 @@ export function OnboardingFlow({
         network={network}
         title="Unlocking wallet"
         sub="Decrypting keys and syncing. This can take a few seconds."
+      />
+    );
+  }
+
+  if (mode === 'watchOnly') {
+    return (
+      <WatchOnlyWalletScreen
+        network={network}
+        onCreate={(args) => void createWatchOnlyWallet(args)}
+        onBack={onBack}
+        busy={onboardingBusy}
+        error={onboardingError}
       />
     );
   }

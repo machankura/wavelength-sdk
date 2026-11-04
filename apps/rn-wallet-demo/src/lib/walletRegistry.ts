@@ -15,8 +15,18 @@ export type WalletEntry = {
   credentialId: string | null;
   dataDir: string;
   endpoints: WalletEndpoints | null;
+  /** The remote signer of a watch-only wallet; absent for every other kind. */
+  signer?: WalletSigner;
   createdAt: number;
   lastUsedAt: number;
+};
+
+// WalletSigner is where a watch-only wallet's remote signer lives. The daemon
+// reads both files on every start, so they outlive the first open.
+export type WalletSigner = {
+  rpcHost: string;
+  macaroonPath: string;
+  tlsCertPath: string;
 };
 
 const WALLETS_KEY = 'wavelength.wallets';
@@ -149,6 +159,13 @@ export function runtimeConfigForEntry(
     allowMainnet: false,
     disableSwaps: false,
     ...endpoints,
+    ...(entry.signer
+      ? {
+          remoteSignerRpcHost: entry.signer.rpcHost,
+          remoteSignerMacaroonPath: entry.signer.macaroonPath,
+          remoteSignerTlsCertPath: entry.signer.tlsCertPath,
+        }
+      : {}),
   };
 }
 

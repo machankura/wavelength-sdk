@@ -26,6 +26,7 @@ import {
 } from './lib/walletRegistry';
 import { useWalletRegistry } from './lib/useWalletRegistry';
 import { RuntimeNetwork, WalletEndpoints } from './lib/runtime-config';
+import { writeSignerFiles } from './lib/signerFiles';
 import { wipeLocalData } from './lib/wipeLocalData';
 import { ActivityScreen } from './screens/activity/ActivityScreen';
 import { HomeScreen } from './screens/home/HomeScreen';
@@ -39,7 +40,10 @@ import { StoppedScreen } from './screens/onboarding/StoppedScreen';
 import { SyncingScreen } from './screens/onboarding/SyncingScreen';
 import { UnlockScreen } from './screens/onboarding/UnlockScreen';
 import { WalletListScreen } from './screens/onboarding/WalletListScreen';
-import { WalletSetupScreen } from './screens/onboarding/WalletSetupScreen';
+import {
+  WalletSetupScreen,
+  type SignerInput,
+} from './screens/onboarding/WalletSetupScreen';
 import { ReceiveScreen } from './screens/receive/ReceiveScreen';
 import { SendScreen } from './screens/send/SendScreen';
 import { SettingsScreen } from './screens/settings/SettingsScreen';
@@ -83,12 +87,13 @@ export function WalletApp() {
     null,
   );
   // preStart is the sub-screen shown while no wallet is running: the list,
-  // the create/restore form, or the legacy network picker for the entry
+  // the create/restore/watch-only form, or the legacy network picker for the entry
   // being opened.
   const [preStart, setPreStart] = useState<
     | { kind: 'list' }
     | { kind: 'create' }
     | { kind: 'restore' }
+    | { kind: 'watchOnly' }
     | { kind: 'chooseNetwork'; entryId: string }
   >({ kind: 'list' });
   // pendingNetwork holds a legacy entry's unpersisted network guess until an
@@ -96,7 +101,9 @@ export function WalletApp() {
   const [pendingNetwork, setPendingNetwork] = useState<
     { network: RuntimeNetwork; endpoints: WalletEndpoints } | null
   >(null);
-  const [onboardingMode, setOnboardingMode] = useState<'create' | 'restore'>(
+  const [onboardingMode, setOnboardingMode] = useState<
+    'create' | 'restore' | 'watchOnly'
+  >(
     'create',
   );
   // regtestUnlocked gates the regtest network option and its advanced
@@ -113,6 +120,9 @@ export function WalletApp() {
   // started) on the create/restore screen; the wallet phase's own `error`
   // never moves for a failure that occurs before start() is called.
   const [setupError, setSetupError] = useState('');
+  // unlockNotice is why a watch-only wallet's first open landed on the unlock
+  // screen. It belongs to that screen, so leaving the wallet clears it.
+  const [unlockNotice, setUnlockNotice] = useState('');
 
   // A failed start() (or stop()) surfaces on the 'error' phase, so the
   // 'starting'/'stopping' spinner needs no error affordance of its own.
@@ -133,7 +143,7 @@ export function WalletApp() {
     async (
       entry: WalletEntry,
       override?: { network: RuntimeNetwork; endpoints: WalletEndpoints },
-      mode: 'create' | 'restore' = 'create',
+      mode: 'create' | 'restore' | 'watchOnly' = 'create',
     ) => {
       if (!entry.network && !override) {
         setSelectedWalletId(entry.id);
@@ -150,7 +160,9 @@ export function WalletApp() {
       }
       setSelectedWalletId(entry.id);
       setPendingNetwork(override ?? null);
-      setOnboardingMode(mode);
+      // An unfinished watch-only entry already has its signer's settings, so it
+      // can only resume as watch-only.
+      setOnboardingMode(entry.signer ? 'watchOnly' : mode);
       // Assembled outside the try so a malformed hand-edited entry throws
       // visibly instead of the open click being a silent no-op. The guard is
       // set only after assembly succeeds, so a throw here cannot leave it
@@ -177,14 +189,29 @@ export function WalletApp() {
   // Continue a dead button with no feedback.
   const submitSetup = useCallback(
     async (
-      mode: 'create' | 'restore',
-      args: { name: string; network: RuntimeNetwork; endpoints: WalletEndpoints },
+      mode: 'create' | 'restore' | 'watchOnly',
+      args: {
+        name: string;
+        network: RuntimeNetwork;
+        endpoints: WalletEndpoints;
+        signer?: SignerInput;
+      },
     ) => {
       setSetupError('');
       let entry: WalletEntry;
       try {
         const root = await getDefaultDataDir();
         entry = newWalletEntry({ ...args, dataDirRoot: root });
+        if (args.signer) {
+          entry.signer = {
+            rpcHost: args.signer.rpcHost,
+            ...writeSignerFiles(
+              entry.dataDir,
+              args.signer.macaroonHex,
+              args.signer.tlsCert,
+            ),
+          };
+        }
         await addWallet(entry);
       } catch (err) {
         setSetupError(
@@ -212,6 +239,7 @@ export function WalletApp() {
     setMnemonic([]);
     setBackupAcknowledged(false);
     setTab('home');
+    setUnlockNotice('');
   }, [stop]);
 
   // retryStart re-runs the failed start against the entry that was selected
@@ -347,15 +375,15 @@ export function WalletApp() {
     [selectedWalletId, pendingNetwork, refresh],
   );
 
-  // onWalletRestored records a completed restore as a password wallet and
-  // skips the backup screen: a restore is a phrase the user already holds.
+  // onWalletRestored records a completed restore's kind and skips the backup
+  // screen: a restore is a phrase or descriptors the user already holds.
   // It fires only once the restored wallet is up, so a restore that fails
   // before then leaves the entry unstamped and needsWallet re-renders the
   // restore form instead of the data-missing screen.
-  const onWalletRestored = useCallback(() => {
+  const onWalletRestored = useCallback((kind: WalletKind) => {
     if (selectedWalletId) {
       void updateWallet(selectedWalletId, {
-        walletKind: 'password',
+        walletKind: kind,
         ...(pendingNetwork
           ? { network: pendingNetwork.network, endpoints: pendingNetwork.endpoints }
           : {}),
@@ -388,6 +416,21 @@ export function WalletApp() {
       setBackupAcknowledged(true);
     },
     [selectedWalletId, pendingNetwork, refresh],
+  );
+
+  // onWatchOnlyLeftLocked keeps a failed first open's message for the unlock
+  // screen that replaces the form, and records the kind: the wallet now exists,
+  // so a later session must offer the password too.
+  const onWatchOnlyLeftLocked = useCallback(
+    (message: string) => {
+      setUnlockNotice(message);
+      if (selectedWalletId) {
+        void updateWallet(selectedWalletId, { walletKind: 'watchOnly' }).then(
+          refresh,
+        );
+      }
+    },
+    [selectedWalletId, refresh],
   );
 
   // recoverWithPhrase tears the runtime down so the user can rebuild the
@@ -425,6 +468,7 @@ export function WalletApp() {
             onSubmit={(args) => void submitSetup('create', args)}
             onBack={null}
             onSwitchMode={() => setPreStart({ kind: 'restore' })}
+            onWatchOnly={() => setPreStart({ kind: 'watchOnly' })}
             busy={runtimeBusy}
             error={setupError || (error?.message ?? '')}
           />
@@ -437,6 +481,7 @@ export function WalletApp() {
           onOpen={(entry) => void openWallet(entry)}
           onCreate={() => setPreStart({ kind: 'create' })}
           onRestore={() => setPreStart({ kind: 'restore' })}
+          onWatchOnly={() => setPreStart({ kind: 'watchOnly' })}
           onRemove={(entry) => void removeEntry(entry)}
           onWipeAll={() => void wipeAll()}
           busy={runtimeBusy}
@@ -444,7 +489,8 @@ export function WalletApp() {
       );
 
     case 'create':
-    case 'restore': {
+    case 'restore':
+    case 'watchOnly': {
       // On first run there is no list to go back to, so only the
       // mode-switch link renders.
       const other = preStart.kind === 'create' ? 'restore' : 'create';
@@ -459,6 +505,11 @@ export function WalletApp() {
             walletList.length > 0 ? () => setPreStart({ kind: 'list' }) : null
           }
           onSwitchMode={() => setPreStart({ kind: other })}
+          onWatchOnly={
+            preStart.kind === 'watchOnly'
+              ? undefined
+              : () => setPreStart({ kind: 'watchOnly' })
+          }
           busy={runtimeBusy}
           error={setupError || (error?.message ?? '')}
         />
@@ -569,7 +620,7 @@ export function WalletApp() {
             // Match the screen's copy: setting up again means bringing back
             // the wallet the user already had, so land on restore. The list
             // remains the deliberate route to a fresh create.
-            setOnboardingMode('restore');
+            setOnboardingMode(activeEntry.signer ? 'watchOnly' : 'restore');
           }}
           onRemove={() => void removeEntry(activeEntry).then(backToWallets)}
         />
@@ -584,6 +635,7 @@ export function WalletApp() {
         onWalletCreated={onWalletCreated}
         onWalletRestored={onWalletRestored}
         onWalletUnlocked={onWalletUnlocked}
+        onWatchOnlyLeftLocked={onWatchOnlyLeftLocked}
         onBack={() => void backToWallets()}
       />
     );
@@ -593,8 +645,11 @@ export function WalletApp() {
       <UnlockScreen
         network={network}
         walletName={activeEntry?.name ?? 'Wallet'}
-        walletKind={activeEntry?.walletKind ?? null}
+        walletKind={
+          activeEntry?.walletKind ?? (activeEntry?.signer ? 'watchOnly' : null)
+        }
         credentialId={activeEntry?.credentialId ?? null}
+        notice={unlockNotice}
         onWalletUnlocked={onWalletUnlocked}
         onRecover={() => void recoverWithPhrase()}
         onBack={() => void backToWallets()}

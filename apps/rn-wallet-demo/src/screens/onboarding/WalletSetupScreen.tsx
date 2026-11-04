@@ -6,6 +6,7 @@ import { AuthHeader } from '../../components/layout/AuthHeader';
 import { AuthLayout } from '../../components/layout/AuthLayout';
 import { Field } from '../../components/ui/Field';
 import { Select } from '../../components/ui/Select';
+import { SecretArea } from '../../components/ui/SecretArea';
 import { InlineError } from '../../components/ui/InlineError';
 import { PrimaryButton, TextLink } from '../../components/ui/Button';
 import { NetworkPicker } from '../../components/ui/NetworkPicker';
@@ -19,6 +20,14 @@ import {
 import { Palette, fonts } from '../../theme/tokens';
 import { useTheme } from '../../theme/ThemeProvider';
 import { useThemedStyles } from '../../theme/useThemedStyles';
+
+// SignerInput is where a watch-only wallet's remote signer is and how to reach
+// it, as pasted into the form.
+export type SignerInput = {
+  rpcHost: string;
+  macaroonHex: string;
+  tlsCert: string;
+};
 
 const makeStyles = (p: Palette) => ({
   eyebrow: {
@@ -58,6 +67,10 @@ const makeStyles = (p: Palette) => ({
     gap: 16,
     padding: 16,
   },
+  signer: {
+    gap: 16,
+    marginBottom: 16,
+  },
   links: {
     alignItems: 'center' as const,
     flexDirection: 'row' as const,
@@ -83,19 +96,23 @@ export function WalletSetupScreen({
   onUnlockRegtest,
   onSubmit,
   onSwitchMode,
+  onWatchOnly,
   onBack,
   busy,
   error,
 }: {
-  mode: 'create' | 'restore';
+  mode: 'create' | 'restore' | 'watchOnly';
   regtestUnlocked: boolean;
   onUnlockRegtest: () => void;
   onSubmit: (args: {
     name: string;
     network: RuntimeNetwork;
     endpoints: WalletEndpoints;
+    signer?: SignerInput;
   }) => void;
   onSwitchMode: () => void;
+  /** Goes to the watch-only setup; omitted while already on it. */
+  onWatchOnly?: () => void;
   onBack: (() => void) | null;
   busy: boolean;
   error: string;
@@ -112,6 +129,9 @@ export function WalletSetupScreen({
     endpointsForNetwork(availableNetworks[0]),
   );
   const [advanced, setAdvanced] = useState(false);
+  const [signerHost, setSignerHost] = useState('');
+  const [signerMacaroon, setSignerMacaroon] = useState('');
+  const [signerCert, setSignerCert] = useState('');
   const Chevron = advanced ? ChevronUp : ChevronDown;
 
   // Endpoints are only ever hand-edited for regtest, so switching away from it
@@ -130,12 +150,26 @@ export function WalletSetupScreen({
   }
 
   const trimmedName = name.trim();
+  const signerOk =
+    mode !== 'watchOnly' ||
+    (signerHost.trim().length > 0 &&
+      signerMacaroon.trim().length > 0 &&
+      signerCert.trim().length > 0);
 
   function handleSubmit() {
     onSubmit({
       name: trimmedName,
       network,
       endpoints: network === 'regtest' ? endpoints : endpointsForNetwork(network),
+      ...(mode === 'watchOnly'
+        ? {
+            signer: {
+              rpcHost: signerHost.trim(),
+              macaroonHex: signerMacaroon,
+              tlsCert: signerCert,
+            },
+          }
+        : {}),
     });
   }
 
@@ -143,8 +177,18 @@ export function WalletSetupScreen({
     <AuthLayout network={network}>
       <Pressable onLongPress={onUnlockRegtest} delayLongPress={600}>
         <AuthHeader
-          title={mode === 'create' ? 'Create a wallet' : 'Restore a wallet'}
-          sub="Name it, choose a network, and continue."
+          title={
+            mode === 'create'
+              ? 'Create a wallet'
+              : mode === 'restore'
+                ? 'Restore a wallet'
+                : 'Watch-only wallet'
+          }
+          sub={
+            mode === 'watchOnly'
+              ? 'Name it, choose a network, and say where your remote signer is.'
+              : 'Name it, choose a network, and continue.'
+          }
         />
       </Pressable>
 
@@ -215,12 +259,36 @@ export function WalletSetupScreen({
         </View>
       ) : null}
 
+      {mode === 'watchOnly' ? (
+        <View style={styles.signer}>
+          <Field
+            label="Signer address"
+            value={signerHost}
+            onChange={setSignerHost}
+            placeholder="host:10019"
+            mono
+          />
+          <SecretArea
+            label="Signer macaroon, as hex"
+            value={signerMacaroon}
+            onChange={setSignerMacaroon}
+            placeholder="xxd -p signer.macaroon"
+          />
+          <SecretArea
+            label="Signer TLS certificate"
+            value={signerCert}
+            onChange={setSignerCert}
+            placeholder="-----BEGIN CERTIFICATE-----"
+          />
+        </View>
+      ) : null}
+
       <PrimaryButton
         icon={ArrowRight}
         iconRight
         onPress={handleSubmit}
         busy={busy}
-        disabled={busy || trimmedName.length === 0}
+        disabled={busy || trimmedName.length === 0 || !signerOk}
       >
         Continue
       </PrimaryButton>
@@ -230,6 +298,9 @@ export function WalletSetupScreen({
         <TextLink onPress={onSwitchMode}>
           {mode === 'create' ? 'Restore instead' : 'Create instead'}
         </TextLink>
+        {onWatchOnly ? (
+          <TextLink onPress={onWatchOnly}>Watch-only</TextLink>
+        ) : null}
         {onBack ? <TextLink onPress={onBack}>Back to wallets</TextLink> : null}
       </View>
     </AuthLayout>

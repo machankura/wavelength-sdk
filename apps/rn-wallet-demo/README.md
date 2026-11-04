@@ -2,8 +2,8 @@
 
 The reference React Native app for [Wavelength](../../README.md): a
 self-custodial Lightning wallet embedded in an Expo app. It exercises the full
-wallet flow: create, restore, or unlock (password or passkey), recovery-phrase
-backup, on-chain boarding and Lightning receive with scannable QRs, send, live
+wallet flow: create, restore (from a phrase or descriptors), or unlock (password
+or passkey), watch-only wallets on a remote signer, recovery-phrase backup, on-chain boarding and Lightning receive with scannable QRs, send, live
 activity, runtime controls, local-data wipe, and light/dark themes, all
 through [`@lightninglabs/wavelength-react-native`](../../packages/react-native)
 and the shared [`@lightninglabs/wavelength-react`](../../packages/react) hooks.
@@ -141,3 +141,22 @@ local build uses), so treat wallets created with it as throwaways.
   The `--terminate-running-process` flag matters: without it, simctl only
   foregrounds the already-running app and its output stays detached. The
   relaunch resets the app, so start the runtime again before expecting logs.
+
+## Watch-only wallets
+
+Choose **Watch-only wallet** from the wallet list to open a wallet whose keys stay
+on a remote signer. Run a signer on the host; an Android emulator reaches it at
+`10.0.2.2`, which must be in its certificate:
+
+```sh
+export WAVESIGNER_PASSWORD=test-password-only
+wavesigner --network=signet create --mnemonic-file wallet.mnemonic
+wavesigner --network=signet export-watchonly --output signer.bundle
+wavesigner --network=signet run --listen=0.0.0.0:10019 --tlsextraip=10.0.2.2
+xxd -p -c0 ~/.wavesigner/signet/signer.macaroon
+```
+
+Paste the macaroon as hex, `tls.cert` and the bundle into the form. The demo writes
+the macaroon and certificate under the wallet's data directory, and keeps the bundle
+only for the first open. The signer must be reachable on every open. The demo turns
+Android backup off, because the macaroon grants signing.

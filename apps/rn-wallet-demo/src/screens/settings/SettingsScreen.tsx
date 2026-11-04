@@ -16,13 +16,18 @@ import {
   Wallet,
   Zap,
 } from 'lucide-react-native';
-import { useWallet, useWalletInfo } from '@lightninglabs/wavelength-react';
+import {
+  useWallet,
+  useWalletDescriptors,
+  useWalletInfo,
+} from '@lightninglabs/wavelength-react';
 import { GatewayFields } from '../../components/GatewayFields';
 import { PageHead } from '../../components/layout/PageHead';
 import { AppTab } from '../../components/layout/nav';
 import { Band } from '../../components/ui/Band';
 import { ConfirmDialog } from '../../components/ui/ConfirmDialog';
 import { CopyButton } from '../../components/ui/CopyButton';
+import { InlineError } from '../../components/ui/InlineError';
 import { Label } from '../../components/ui/Label';
 import { Segmented } from '../../components/ui/Segmented';
 import { SummaryRow } from '../../components/ui/SummaryRow';
@@ -34,6 +39,31 @@ import { useTheme } from '../../theme/ThemeProvider';
 import { useThemedStyles } from '../../theme/useThemedStyles';
 
 const makeStyles = (p: Palette) => ({
+  export: {
+    gap: 8,
+    marginTop: 16,
+  },
+  exportButton: {
+    color: p.text,
+    fontFamily: fonts.sansMedium,
+    fontSize: 14,
+    textDecorationLine: 'underline' as const,
+  },
+  exportRow: {
+    backgroundColor: p.well,
+    borderColor: p.border,
+    borderWidth: 1,
+    gap: 6,
+    padding: 8,
+  },
+  exportText: {
+    color: p.text,
+    fontFamily: fonts.mono,
+    fontSize: 11,
+  },
+  exportCopy: {
+    alignSelf: 'flex-start' as const,
+  },
   statGrid: {
     flexDirection: 'row' as const,
     flexWrap: 'wrap' as const,
@@ -243,6 +273,48 @@ function createdLabel(ms: number): string {
   });
 }
 
+// ExportDescriptors shows the wallet's public descriptors, safe for watch-only
+// software. Private export is deliberately absent: showing private keys on
+// screen is a poor pattern for a reference app to demonstrate.
+function ExportDescriptors() {
+  const styles = useThemedStyles(makeStyles);
+  const { listDescriptors, listDescriptorsPending, listDescriptorsError } =
+    useWalletDescriptors();
+  const [descriptors, setDescriptors] = useState<string[] | null>(null);
+
+  async function load() {
+    try {
+      const result = await listDescriptors();
+      setDescriptors(result.descriptors ?? []);
+    } catch {
+      // Surfaced through listDescriptorsError.
+    }
+  }
+
+  return (
+    <View style={styles.export}>
+      <Pressable
+        onPress={() => void load()}
+        disabled={listDescriptorsPending}
+        hitSlop={8}
+      >
+        <Text style={styles.exportButton}>Export descriptors</Text>
+      </Pressable>
+      <InlineError message={listDescriptorsError?.message ?? ''} />
+      {(descriptors ?? []).map((descriptor) => (
+        <View key={descriptor} style={styles.exportRow}>
+          <Text style={styles.exportText} selectable>
+            {descriptor}
+          </Text>
+          <View style={styles.exportCopy}>
+            <CopyButton value={descriptor} />
+          </View>
+        </View>
+      ))}
+    </View>
+  );
+}
+
 // SettingsScreen surfaces this wallet's identity, runtime status, appearance,
 // wallet-type security, advanced gateway configuration, build version and
 // the wallet-management actions (switch, delete).
@@ -397,10 +469,25 @@ export function SettingsScreen({
                 ? 'Passkey'
                 : entry.walletKind === 'password'
                   ? 'Password'
-                  : 'Unknown'
+                  : entry.walletKind === 'descriptor'
+                    ? 'Descriptors'
+                    : entry.walletKind === 'watchOnly'
+                      ? 'Watch-only'
+                      : 'Unknown'
             }
           />
+          {entry.signer ? (
+            <SummaryRow label="Remote signer" value={entry.signer.rpcHost} mono />
+          ) : null}
+          {info?.manifestHash ? (
+            <SummaryRow
+              label="Manifest hash"
+              value={shortKey(info.manifestHash)}
+              mono
+            />
+          ) : null}
         </View>
+        <ExportDescriptors />
       </Band>
 
       <Band tinted>

@@ -136,6 +136,7 @@ export function WalletListScreen({
   onOpen,
   onCreate,
   onRestore,
+  onWatchOnly,
   onRemove,
   onWipeAll,
   busy,
@@ -144,6 +145,7 @@ export function WalletListScreen({
   onOpen: (entry: WalletEntry) => void;
   onCreate: () => void;
   onRestore: () => void;
+  onWatchOnly: () => void;
   onRemove: (entry: WalletEntry) => void;
   // Not part of the Task 2 brief's prop table; added because the brief also
   // calls for a footer WipeDataButton, and WipeDataButton always needs a real
@@ -224,6 +226,7 @@ export function WalletListScreen({
         </PrimaryButton>
         <View style={styles.link}>
           <TextLink onPress={onRestore}>Restore a wallet</TextLink>
+          <TextLink onPress={onWatchOnly}>Watch-only wallet</TextLink>
         </View>
       </View>
 

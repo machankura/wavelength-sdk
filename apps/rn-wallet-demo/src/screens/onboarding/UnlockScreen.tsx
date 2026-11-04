@@ -88,6 +88,7 @@ export function UnlockScreen({
   walletName,
   walletKind,
   credentialId,
+  notice = '',
   onWalletUnlocked,
   onRecover,
   onBack,
@@ -97,6 +98,8 @@ export function UnlockScreen({
   walletName: string;
   walletKind: WalletKind | null;
   credentialId: string | null;
+  /** Why the wallet landed here, shown until an unlock attempt replaces it. */
+  notice?: string;
   onWalletUnlocked: (kind: WalletKind, credentialId?: string) => void;
   onRecover: () => void;
   onBack: () => void;
@@ -125,14 +128,21 @@ export function UnlockScreen({
 
   // The passkey option is offered whenever the device supports PRF and the
   // wallet is not explicitly a password wallet; an unknown marker still
-  // permits a passkey attempt.
-  const showPasskey = passkey.supported && walletKind !== 'password';
+  // permits a passkey attempt. Wallets restored from descriptors and watch-only
+  // wallets are password wallets too, because their forms set a password.
+  const passwordWallet =
+    walletKind === 'password' ||
+    walletKind === 'descriptor' ||
+    walletKind === 'watchOnly';
+  const showPasskey = passkey.supported && !passwordWallet;
   const showPassword =
-    walletKind === 'password' || (!showPasskey && walletKind === null);
+    passwordWallet || (!showPasskey && walletKind === null);
 
   // The subtitle names only the methods actually offered.
   const sub =
-    showPasskey && showPassword
+    walletKind === 'watchOnly'
+      ? 'Unlock with your password. Your remote signer must be reachable.'
+      : showPasskey && showPassword
       ? 'Unlock with your passkey or password to sync the wallet.'
       : showPasskey
         ? 'Unlock with your passkey to sync the wallet.'
@@ -149,7 +159,7 @@ export function UnlockScreen({
     }
     // Outside the try: a throwing AsyncStorage write in onWalletUnlocked
     // must not be swallowed by unlock's own catch.
-    onWalletUnlocked('password');
+    onWalletUnlocked(passwordWallet && walletKind ? walletKind : 'password');
   }
 
   // onUnlockPasskey opens an existing passkey wallet, scoped to the known
@@ -238,15 +248,23 @@ export function UnlockScreen({
 
       <View style={{ marginTop: 12 }}>
         <InlineError
-          message={unlockError?.message || passkey.openError?.message || ''}
+          message={
+            unlockError?.message ||
+            passkey.openError?.message ||
+            (unlockPending ? '' : notice)
+          }
         />
       </View>
 
-      <View style={styles.recoverRow}>
-        <RotateCcw size={13} color={palette.faint} />
-        <Text style={styles.recoverText}>Lost access?</Text>
-        <TextLink onPress={onRecover}>Recover with phrase</TextLink>
-      </View>
+      {/* A watch-only wallet has no phrase to recover with: its keys are on the
+          signer. */}
+      {walletKind === 'watchOnly' ? null : (
+        <View style={styles.recoverRow}>
+          <RotateCcw size={13} color={palette.faint} />
+          <Text style={styles.recoverText}>Lost access?</Text>
+          <TextLink onPress={onRecover}>Recover with phrase</TextLink>
+        </View>
+      )}
 
       <View style={styles.removeRow}>
         <Pressable onPress={() => setConfirmRemove(true)} hitSlop={8}>

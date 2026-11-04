@@ -90,3 +90,17 @@ export function countdown(secondsLeft: number): string {
 
   return `${minutes}:${String(safe % 60).padStart(2, "0")}`;
 }
+
+// parseBirthday reads an optional YYYY-MM-DD date. It returns null when the
+// text is neither empty nor a real date, and undefined when it is empty.
+export function parseBirthday(text: string): Date | null | undefined {
+  const trimmed = text.trim();
+  if (trimmed === '') {
+    return undefined;
+  }
+  const date = new Date(trimmed);
+
+  return /^\d{4}-\d{2}-\d{2}$/.test(trimmed) && !Number.isNaN(date.getTime())
+    ? date
+    : null;
+}
