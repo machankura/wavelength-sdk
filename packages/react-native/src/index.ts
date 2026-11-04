@@ -1,4 +1,4 @@
-import { NativeEventEmitter, NativeModules } from 'react-native';
+import { AppState, NativeEventEmitter, NativeModules } from 'react-native';
 import {
   createWalletEngine,
   type ExternalSeedWalletClient,
@@ -9,6 +9,10 @@ import {
 } from '@lightninglabs/wavelength-core';
 import NativeWavelength from './NativeWavelength.ts';
 import { NativeWavelengthClient } from './client.ts';
+import {
+  watchBackground,
+  type RestartAfterBackgroundOptions,
+} from './lifecycle.ts';
 import {
   nativePasskeyCeremony,
   type NativePasskeyCeremonyOptions,
@@ -58,6 +62,24 @@ export function createNativeWalletEngine(
 }
 
 /**
+ * Restarts the engine's daemon when the app returns from a real stay in the
+ * background, so an open wallet does not carry on over gRPC connections frozen on
+ * their old network path. The daemon cannot observe the app lifecycle itself.
+ * Call it once beside {@link createNativeWalletEngine}; it returns the function
+ * that stops watching.
+ *
+ * The wallet comes back on 'locked', so the host must render its unlock flow for
+ * that phase: the SDK holds no password. A wallet that is locked or not yet
+ * created is left alone, as it holds no external connections.
+ */
+export function restartAfterBackground(
+  engine: WalletEngine,
+  options?: RestartAfterBackgroundOptions,
+): () => void {
+  return watchBackground(engine, AppState, options);
+}
+
+/**
  * Creates the native (Android Credential Manager / iOS AuthenticationServices)
  * implementation of the {@link PasskeyCeremony} contract; pass it to
  * useWalletPasskey, or drive it directly. Requires the relying-party domain
@@ -89,6 +111,8 @@ export type {
   NativePasskeyCeremonyOptions,
   WavelengthPasskeyNativeModule,
 } from './passkey.ts';
+
+export type { RestartAfterBackgroundOptions } from './lifecycle.ts';
 
 export { defaultConfig } from './config.ts';
 // The raw module lets a package that drives the daemon some other way (for
