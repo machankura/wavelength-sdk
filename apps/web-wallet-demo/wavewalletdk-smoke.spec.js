@@ -571,3 +571,68 @@ test("removing a wallet restores first-run, and missing OPFS data offers to set 
     page.getByRole("button", { name: "Back to wallets" }),
   ).toBeVisible();
 });
+
+test("a wallet restored from descriptors exports them and reopens with its password", async ({
+  page,
+}, testInfo) => {
+  const password = "test-password";
+  const baseURL = testInfo.project.use.baseURL;
+  // Throwaway test keys for this mock regtest run, from a fixed seed of the
+  // bytes 1 to 32. They guard nothing.
+  const root =
+    "tprv8ZgxMBicQKsPd5w8qtzAq3PyGufi83FCBGkATs6nM8MBK5g6M78T1CMNKFMSxvWh5Xo1em6dr8R79G3ZF8K5RU8Kq62THS7SESCqf6RCC1Y";
+  const descriptors = [
+    `tr(${root}/86h/0h/0h/<0;1>/*)#was2tk3j`,
+    `wpkh(${root}/84h/0h/0h/<0;1>/*)#y2fphlge`,
+  ];
+  const consoleMessages = [];
+  page.on("console", (message) => consoleMessages.push(message.text()));
+
+  await page.goto("/?regtest=1");
+  const cont = page.getByRole("button", { name: "Continue" });
+  await expect(cont).toBeVisible({ timeout: 30000 });
+  await page.getByRole("button", { name: "Restore instead" }).click();
+  await fillCreateForm(page, baseURL, "Descriptor Wallet");
+  await cont.click();
+
+  await expect(
+    page.getByRole("heading", { name: "Restore wallet" }),
+  ).toBeVisible({ timeout: 60000 });
+  await page.getByRole("button", { name: "Descriptors" }).click();
+  await page.getByLabel("New password").fill(password);
+  await page.getByLabel("Confirm password").fill(password);
+  await page
+    .getByLabel("Private descriptors, one per line")
+    .fill(descriptors.join("\n"));
+  await page.getByLabel("Birthday (optional)").fill("2026-01-01");
+  // The mock has no indexer to scan.
+  await page.getByLabel("Recover wallet state").click();
+  await page.getByRole("button", { name: "Restore wallet" }).click();
+
+  const accountChip = page.getByTestId("account-pubkey");
+  await expect(accountChip).toBeVisible({ timeout: 60000 });
+  const identity = await accountChip.getAttribute("data-pubkey");
+  expect(identity.length).toBeGreaterThan(10);
+
+  await page.getByRole("button", { name: "Settings" }).click();
+  await expect(page.getByText("Descriptors", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Export descriptors" }).click();
+  const exported = page.getByRole("list", { name: "Public descriptors" });
+  await expect(exported.getByText(/^tr\(/)).toBeVisible({ timeout: 30000 });
+  await expect(exported.getByText(/^wpkh\(/)).toBeVisible();
+  expect(await exported.textContent()).not.toContain("prv");
+
+  await page.reload();
+  await expect(page.getByRole("heading", { name: "Your wallets" })).toBeVisible(
+    { timeout: 30000 },
+  );
+  await page.getByRole("button", { name: "Descriptor Wallet" }).click();
+  const unlock = page.getByRole("button", { name: "Unlock", exact: true });
+  await expect(unlock).toBeVisible({ timeout: 60000 });
+  await page.getByLabel("Password", { exact: true }).fill(password);
+  await unlock.click();
+  await expect(accountChip).toBeVisible({ timeout: 60000 });
+  expect(await accountChip.getAttribute("data-pubkey")).toBe(identity);
+
+  expect(consoleMessages.join("\n")).not.toContain(root);
+});

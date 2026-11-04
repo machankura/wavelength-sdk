@@ -14,12 +14,17 @@ import {
   Wallet,
   Zap,
 } from "lucide-react";
-import { useWallet, useWalletInfo } from "@lightninglabs/wavelength-react";
+import {
+  useWallet,
+  useWalletDescriptors,
+  useWalletInfo,
+} from "@lightninglabs/wavelength-react";
 import { GatewayFields } from "../../components/GatewayFields";
 import { PageHead } from "../../components/layout/PageHead";
 import { AppTab } from "../../components/layout/nav";
 import { Band } from "../../components/ui/Band";
 import { CopyButton } from "../../components/ui/CopyButton";
+import { InlineError } from "../../components/ui/InlineError";
 import { Label } from "../../components/ui/Label";
 import { Segmented } from "../../components/ui/Segmented";
 import { SummaryRow } from "../../components/ui/SummaryRow";
@@ -48,6 +53,53 @@ function createdLabel(ms: number): string {
     day: "numeric",
     year: "numeric",
   });
+}
+
+// ExportDescriptors shows the wallet's public descriptors, safe for watch-only
+// software. Private export is deliberately absent: showing private keys on
+// screen is a poor pattern for a reference app to demonstrate.
+function ExportDescriptors() {
+  const { listDescriptors, listDescriptorsPending, listDescriptorsError } =
+    useWalletDescriptors();
+  const [descriptors, setDescriptors] = useState<string[] | null>(null);
+
+  async function load() {
+    try {
+      const result = await listDescriptors();
+      setDescriptors(result.descriptors ?? []);
+    } catch {
+      // Surfaced through listDescriptorsError.
+    }
+  }
+
+  return (
+    <div className="mt-4">
+      <button
+        type="button"
+        onClick={() => void load()}
+        disabled={listDescriptorsPending}
+        className="text-sm font-medium text-fg hover:underline
+          disabled:cursor-not-allowed disabled:text-muted"
+      >
+        Export descriptors
+      </button>
+      <InlineError message={listDescriptorsError?.message ?? ""} />
+      {descriptors ? (
+        <ul className="mt-2 space-y-2" aria-label="Public descriptors">
+          {descriptors.map((descriptor) => (
+            <li key={descriptor} className="border border-border bg-well p-2">
+              <div className="break-all font-mono text-xs text-fg">
+                {descriptor}
+              </div>
+              <div className="mt-1">
+                <CopyButton value={descriptor} />
+              </div>
+            </li>
+          ))}
+        </ul>
+      ) : null}
+    </div>
+  );
 }
 
 // SettingsScreen surfaces this wallet's identity, runtime status, appearance,
@@ -213,10 +265,13 @@ export function SettingsScreen({
                       ? "Passkey"
                       : entry.walletKind === "password"
                         ? "Password"
-                        : "Unknown"
+                        : entry.walletKind === "descriptor"
+                          ? "Descriptors"
+                          : "Unknown"
                   }
                 />
               </div>
+              <ExportDescriptors />
             </>
           }
           right={

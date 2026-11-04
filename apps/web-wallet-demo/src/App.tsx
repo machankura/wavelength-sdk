@@ -226,15 +226,15 @@ export function App() {
     [selectedWalletId, pendingNetwork],
   );
 
-  // onWalletRestored records a completed restore as a password wallet and
-  // skips the backup screen: a restore is a phrase the user already holds.
+  // onWalletRestored records a completed restore's kind and skips the backup
+  // screen: a restore is a phrase or descriptors the user already holds.
   // It fires only once the restored wallet is up, so a restore that fails
   // before then leaves the entry unstamped and needsWallet re-renders the
   // restore form instead of the data-missing screen.
-  const onWalletRestored = useCallback(() => {
+  const onWalletRestored = useCallback((kind: WalletKind) => {
     if (selectedWalletId) {
       updateWallet(selectedWalletId, {
-        walletKind: "password",
+        walletKind: kind,
         ...(pendingNetwork
           ? { network: pendingNetwork.network, endpoints: pendingNetwork.endpoints }
           : {}),

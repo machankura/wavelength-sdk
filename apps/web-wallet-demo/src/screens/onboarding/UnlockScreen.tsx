@@ -61,9 +61,11 @@ export function UnlockScreen({
 
   // The passkey option does not depend on a locally stored wrap: it is offered
   // whenever the device supports PRF and the wallet is not explicitly a password
-  // wallet (an unknown marker still permits a passkey attempt).
-  const showPasskey = passkey.supported && walletKind !== "password";
-  const showPassword = walletKind === "password" || (!showPasskey && walletKind === null);
+  // wallet (an unknown marker still permits a passkey attempt). A wallet restored
+  // from descriptors is a password wallet too, because the form sets a password.
+  const passwordWallet = walletKind === "password" || walletKind === "descriptor";
+  const showPasskey = passkey.supported && !passwordWallet;
+  const showPassword = passwordWallet || (!showPasskey && walletKind === null);
 
   // The subtitle names only the methods actually offered, so a passkey wallet
   // (which has no password) is never told it can unlock with one.
@@ -85,7 +87,7 @@ export function UnlockScreen({
     }
     // Outside the try: a throwing localStorage write in onWalletUnlocked
     // must not be swallowed by unlock's own catch.
-    onWalletUnlocked("password");
+    onWalletUnlocked(walletKind === "descriptor" ? "descriptor" : "password");
   }
 
   // onUnlockPasskey opens an existing passkey wallet, scoped to the known

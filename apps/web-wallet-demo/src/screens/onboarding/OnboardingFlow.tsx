@@ -10,7 +10,7 @@ import type { WalletKind } from "@lightninglabs/wavelength-react";
 import { instrumentedPasskeyCeremony } from "../../lib/performance";
 import { CreateWalletScreen } from "./CreateWalletScreen";
 import { LoadingScreen } from "./LoadingScreen";
-import { RestoreWalletScreen } from "./RestoreWalletScreen";
+import { RestoreWalletScreen, type RestoreArgs } from "./RestoreWalletScreen";
 import { loadWallets } from "../../lib/walletRegistry";
 
 // passkeyName labels a freshly created passkey with the wallet's user-chosen
@@ -51,7 +51,7 @@ export function OnboardingFlow({
     credentialId?: string,
   ) => void;
   /** Called once a phrase restore has brought the wallet up. */
-  onWalletRestored: () => void;
+  onWalletRestored: (kind: WalletKind) => void;
   onWalletUnlocked: (kind: WalletKind, credentialId?: string) => void;
   /** Stops the runtime and returns to the wallet list. */
   onBack: () => void;
@@ -174,21 +174,26 @@ export function OnboardingFlow({
   // the entry unstamped, so the needsWallet fallback re-renders this restore
   // form (with the snapshot's preserved failure) instead of treating the
   // entry as an existing wallet whose data went missing.
-  async function restorePasswordWallet(args: {
-    password: string;
-    mnemonic: string[];
-    passphrase: string;
-    recoverState: boolean;
-    recoveryWindow?: number;
-  }) {
+  async function restorePasswordWallet(args: RestoreArgs) {
+    const options = {
+      password: args.password,
+      recoverState: args.recoverState,
+      recoveryWindow: args.recoveryWindow,
+    };
     try {
-      await restore({
-        password: args.password,
-        mnemonic: args.mnemonic,
-        seedPassphrase: args.passphrase || undefined,
-        recoverState: args.recoverState,
-        recoveryWindow: args.recoveryWindow,
-      });
+      await restore(
+        args.source === "descriptors"
+          ? {
+              ...options,
+              descriptors: args.descriptors,
+              birthday: args.birthday,
+            }
+          : {
+              ...options,
+              mnemonic: args.mnemonic,
+              seedPassphrase: args.passphrase || undefined,
+            },
+      );
     } catch {
       // Surfaced via restoreError while this form is still mounted, and via
       // restoreFailure once the phase falls back and remounts it.
@@ -196,16 +201,10 @@ export function OnboardingFlow({
     }
     // Outside the try: a throwing localStorage write in onWalletRestored must
     // not be swallowed by the restore's own catch.
-    onWalletRestored();
+    onWalletRestored(args.source === "descriptors" ? "descriptor" : "password");
   }
 
-  function onRestore(args: {
-    password: string;
-    mnemonic: string[];
-    passphrase: string;
-    recoverState: boolean;
-    recoveryWindow?: number;
-  }) {
+  function onRestore(args: RestoreArgs) {
     void restorePasswordWallet(args);
   }
 
