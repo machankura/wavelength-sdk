@@ -110,6 +110,8 @@ RCT_EXPORT_MODULE(Wavelength)
       result = MobileStartExternalSeedWallet(params, &error);
     } else if ([method isEqualToString:@"startDescriptorWallet"]) {
       result = MobileStartDescriptorWallet(params, &error);
+    } else if ([method isEqualToString:@"startWatchOnlyWallet"]) {
+      result = MobileStartWatchOnlyWallet(params, &error);
     } else if ([method isEqualToString:@"stop"]) {
       MobileStop(&error);
     } else if ([method isEqualToString:@"getInfo"]) {

@@ -19,6 +19,10 @@ const nativeMethods = {
     'Mobile.startDescriptorWallet',
     'MobileStartDescriptorWallet',
   ],
+  startWatchOnlyWallet: [
+    'Mobile.startWatchOnlyWallet',
+    'MobileStartWatchOnlyWallet',
+  ],
   stop: ['Mobile.stop', 'MobileStop'],
   getInfo: ['Mobile.getInfo', 'MobileGetInfo'],
   status: ['Mobile.status', 'MobileStatus'],
@@ -131,6 +135,19 @@ describe('native facade dispatch', () => {
     assert.match(
       mm,
       /\[method isEqualToString:@"startDescriptorWallet"\]\)\s*\{\s*result = MobileStartDescriptorWallet\(params, &error\);/,
+    );
+  });
+
+  it('forwards watch-only starts as byte request and result values', async () => {
+    const { kt, mm } = await readNativeSources();
+
+    assert.match(
+      kt,
+      /"startWatchOnlyWallet"\s*->\s*Mobile\.startWatchOnlyWallet\(params\)\.toString\(Charsets\.UTF_8\)/,
+    );
+    assert.match(
+      mm,
+      /\[method isEqualToString:@"startWatchOnlyWallet"\]\)\s*\{\s*result = MobileStartWatchOnlyWallet\(params, &error\);/,
     );
   });
 

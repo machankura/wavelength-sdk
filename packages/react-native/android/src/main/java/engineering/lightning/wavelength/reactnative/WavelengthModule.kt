@@ -161,6 +161,8 @@ class WavelengthModule(reactContext: ReactApplicationContext) :
         Mobile.startExternalSeedWallet(params).toString(Charsets.UTF_8)
       "startDescriptorWallet" ->
         Mobile.startDescriptorWallet(params).toString(Charsets.UTF_8)
+      "startWatchOnlyWallet" ->
+        Mobile.startWatchOnlyWallet(params).toString(Charsets.UTF_8)
       "stop" -> { Mobile.stop(); "" }
       "getInfo" -> Mobile.getInfo().toString(Charsets.UTF_8)
       "status" -> Mobile.status().toString(Charsets.UTF_8)
