@@ -51,7 +51,7 @@ const reactSymbols = [
   'useWalletDeposit', 'useWalletReceive', 'useWalletPrepareSend', 'useWalletSend',
   'useWalletRefresh', 'useWalletPasskey', 'PasskeyWalletOutcome',
   'useWalletExit', 'useWalletExitPlan', 'useWalletExitBatch', 'useWalletExitStatus',
-  'useWalletExits', 'useWalletList', 'useWalletSweep',
+  'useWalletExits', 'useWalletList', 'useWalletDescriptors', 'useWalletSweep',
 ];
 
 const webSymbols = [

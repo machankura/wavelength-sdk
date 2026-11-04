@@ -687,6 +687,9 @@ export const walletEngineSig = `interface WalletEngine {
   restoreWallet(req: RestoreWalletRequest): Promise<WalletInfo>;
   acknowledgeRecovery(): void;
   unlockWallet(req: UnlockWalletRequest): Promise<UnlockWalletResult>;
+  listWalletDescriptors(
+    req?: ListWalletDescriptorsRequest,
+  ): Promise<ListWalletDescriptorsResult>;
   openWalletFromPasskey(
     req: OpenWalletFromPasskeyRequest,
   ): Promise<OpenWalletFromPasskeyResult>;
@@ -709,9 +712,12 @@ export const walletEngineSig = `interface WalletEngine {
   dispose(): void;
 }`;
 
-export const restoreWalletRequestSig = `type RestoreWalletRequest = CreateWalletRequest & {
-  mnemonic: string[];
-};`;
+export const restoreWalletRequestSig = `type RestoreWalletRequest = CreateWalletRequest & (
+  | { mnemonic: string[] }
+  | { descriptors: string[] }
+  | { watchOnlyBundle: string }
+  | { watchOnlyManifest: string; authKeys: string }
+);`;
 
 `WalletEngine` is the headless wallet orchestrator every framework binding is built on: it owns the lifecycle phase machine, the state snapshot (`phase`, `info`, `balance`, `activity`, `recovery`, `logs`), and the background processes that keep them fresh. Build one over any transport with [`createWalletEngine()`](#createWalletEngine), or reach for a transport's own factory (`createWebWalletEngine()` from [wavelength-web](/reference/wavelength-web/), `createNativeWalletEngine()` from [wavelength-react-native](/reference/wavelength-react-native/)), which builds the client for you. Pass the engine to `WavelengthProvider` from [wavelength-react](/reference/wavelength-react/), or drive it directly: `getSnapshot()`/`subscribe()` work the same for a vanilla consumer as for a framework binding.
 
@@ -766,7 +772,7 @@ The engine interface. Every method mirrors the matching `WavelengthClient` metho
   { name: 'stop()', type: '() => Promise<void>', desc: "Stops the runtime and clears the in-memory snapshot (info/balance/activity reset to null/null/[]); persisted wallet data is untouched. A failure moves phase to 'error'." },
   { name: 'refresh()', type: '() => Promise<void>', desc: 'Re-fetches info, balance, and activity concurrently.' },
   { name: 'createWallet(req)', type: '(req: CreateWalletRequest) => Promise<CreateWalletResult>', desc: 'Creates a new wallet, refetches info, and kicks a background refresh.' },
-  { name: 'restoreWallet(req)', type: '(req: RestoreWalletRequest) => Promise<WalletInfo>', desc: "Restores a wallet from req.mnemonic. Resolves as soon as the restored wallet is usable; the optional server-assisted recovery scan (req.recoverState) continues in the background, observed through snapshot.recovery. Rejects only when the restore fails before the wallet came up; if the scan itself fails after the wallet is usable, the promise still resolves and the failure surfaces as recovery.status === 'failed' instead. See RestoreWalletRequest below." },
+  { name: 'restoreWallet(req)', type: '(req: RestoreWalletRequest) => Promise<WalletInfo>', desc: "Restores a wallet from exactly one source: req.mnemonic, req.descriptors, req.watchOnlyBundle, or req.watchOnlyManifest. Resolves as soon as the restored wallet is usable; the optional server-assisted recovery scan (req.recoverState) continues in the background, observed through snapshot.recovery. Rejects only when the restore fails before the wallet came up; if the scan itself fails after the wallet is usable, the promise still resolves and the failure surfaces as recovery.status === 'failed' instead. See RestoreWalletRequest below." },
   { name: 'acknowledgeRecovery()', type: '() => void', desc: "Resets snapshot.recovery to { status: 'idle' } (e.g. after dismissing a banner)." },
   { name: 'unlockWallet(req)', type: '(req: UnlockWalletRequest) => Promise<UnlockWalletResult>', desc: 'Unlocks an existing wallet, refetches info, and kicks a background refresh.' },
   { name: 'openWalletFromPasskey(req)', type: '(req: OpenWalletFromPasskeyRequest) => Promise<OpenWalletFromPasskeyResult>', desc: 'Opens the wallet from a passkey PRF output, refetches info, and kicks a background refresh.' },
@@ -3229,7 +3235,7 @@ Normalizes an unknown thrown value to an `Error`, preserving an existing `Error`
 
 ## Passkeys
 
-export const walletKindSig = `type WalletKind = 'passkey' | 'password';`;
+export const walletKindSig = `type WalletKind = 'passkey' | 'password' | 'descriptor' | 'watchOnly';`;
 export const passkeyAssertionSig = `type PasskeyAssertion = {
   prfOutput: string;
   credentialId: string;

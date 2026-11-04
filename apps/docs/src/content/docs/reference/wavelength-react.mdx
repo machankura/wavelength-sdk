@@ -196,7 +196,7 @@ A `PasskeyCancelledError` (the user dismissed the OS prompt) is the one exceptio
 
 A component composing several of these hooks (`create` and `deposit` side by side, say) never needs destructure aliases to avoid name collisions. [`useWalletPasskey`](#useWalletPasskey)'s `create`/`open` fields follow the same pattern, but this is the one place the prefix does not save you: `useWalletCreate` and `useWalletPasskey` both expose a `create` verb, so destructuring both in the same component collides on all four of `create`, `createPending`, `createError`, and `resetCreate`. Keep one as a namespaced object (`const passkey = useWalletPasskey(...)`) instead of destructuring both.
 
-Each hook's return type is also exported as `UseWallet<Verb>Result` (`UseWalletCreateResult`, `UseWalletRestoreResult`, `UseWalletUnlockResult`, `UseWalletDepositResult`, `UseWalletReceiveResult`, `UseWalletPrepareSendResult`, `UseWalletSendResult`, `UseWalletRefreshResult`, and the exit-hook result types documented in [Exiting Ark](#exiting-ark) below), for typing wrapper components around a hook without re-deriving its shape.
+Each hook's return type is also exported as `UseWallet<Verb>Result` (`UseWalletCreateResult`, `UseWalletRestoreResult`, `UseWalletUnlockResult`, `UseWalletDepositResult`, `UseWalletReceiveResult`, `UseWalletPrepareSendResult`, `UseWalletSendResult`, `UseWalletRefreshResult`, `UseWalletDescriptorsResult`, and the exit-hook result types documented in [Exiting Ark](#exiting-ark) below), for typing wrapper components around a hook without re-deriving its shape.
 
 export const useWalletCreateSig = `function useWalletCreate(): {
   create(req: CreateWalletRequest): Promise<CreateWalletResult>;
@@ -232,12 +232,12 @@ export const useWalletRestoreSig = `function useWalletRestore(): {
 
 <ApiSymbol name="useWalletRestore" kind="function">
 
-Restores a wallet from a mnemonic, with hook-local restorePending/restoreError/restoreData state.
+Restores a wallet from a mnemonic, private descriptors, or a remote signer's export, with hook-local restorePending/restoreError/restoreData state.
 
 <Signature title="wavelength-react.d.ts" code={useWalletRestoreSig} />
 
 <ParamsTable rows={[
-  { name: 'restore(req)', type: '(req: RestoreWalletRequest) => Promise<WalletInfo>', desc: 'Restores a wallet from req.mnemonic. See restoreWallet on the wavelength-core reference.' },
+  { name: 'restore(req)', type: '(req: RestoreWalletRequest) => Promise<WalletInfo>', desc: 'Restores a wallet from the request\'s one source. See restoreWallet on the wavelength-core reference.' },
 ]} />
 
 <Returns type="{ restore, restorePending, restoreError, restoreData, resetRestore }">
@@ -581,6 +581,31 @@ failed call (last-good semantics), instead of clearing.
 
 </ApiSymbol>
 
+export const useWalletDescriptorsSig = `function useWalletDescriptors(): {
+  listDescriptors(
+    req?: ListWalletDescriptorsRequest,
+  ): Promise<ListWalletDescriptorsResult>;
+  listDescriptorsPending: boolean;
+  listDescriptorsError: Error | null;
+  resetListDescriptors(): void;
+};`;
+
+<ApiSymbol name="useWalletDescriptors" kind="function">
+
+Exports the open wallet's output descriptors on demand, with hook-local listDescriptorsPending/listDescriptorsError state. A wrapper around [`WalletEngine.listWalletDescriptors()`](/reference/wavelength-core/#WalletEngine), which rejects with `unsupported_facade_method` when the client is not a [`DescriptorWalletClient`](/reference/wavelength-core/#DescriptorWalletClient).
+
+<Signature title="wavelength-react.d.ts" code={useWalletDescriptorsSig} />
+
+<ParamsTable rows={[
+  { name: 'listDescriptors(req)', type: '(req?: ListWalletDescriptorsRequest) => Promise<ListWalletDescriptorsResult>', desc: 'Public descriptors by default. Private ones need includePrivate and the resupplied mnemonic or root descriptors. See DescriptorWalletClient on the wavelength-core reference.' },
+]} />
+
+<Returns type="{ listDescriptors, listDescriptorsPending, listDescriptorsError, resetListDescriptors }">
+See [the mutation convention](#the-mutation-convention), with one exception: there is no `listDescriptorsData`. A result can hold private keys, so it is returned to the caller and never kept in React state. Handle it the same way in your own code.
+</Returns>
+
+</ApiSymbol>
+
 ## Passkeys
 
 export const useWalletPasskeySig = `function useWalletPasskey(ceremony: PasskeyCeremony): {
@@ -600,7 +625,7 @@ export const passkeyWalletOutcomeSig = `type PasskeyWalletOutcome = {
   credentialId: string;
 };`;
 
-export const passkeyCeremonySig = `type WalletKind = 'passkey' | 'password';
+export const passkeyCeremonySig = `type WalletKind = 'passkey' | 'password' | 'descriptor' | 'watchOnly';
 
 type PasskeyAssertion = {
   prfOutput: string;
@@ -661,7 +686,7 @@ The per-platform contract `useWalletPasskey` drives. It is defined in `wavelengt
 <Signature title="wavelength-react.d.ts" code={passkeyCeremonySig} />
 
 <ParamsTable rows={[
-  { name: 'WalletKind', type: "'passkey' | 'password'", desc: 'Labels how a local wallet is unlocked.' },
+  { name: 'WalletKind', type: "'passkey' | 'password' | 'descriptor' | 'watchOnly'", desc: 'Labels how a local wallet is unlocked.' },
   { name: 'supportsPasskeyPrf()', type: '() => Promise<boolean>', desc: 'Resolves true when the platform supports passkey PRF.' },
   { name: 'registerPasskeyWallet(appName)', type: '(appName: string) => Promise<PasskeyAssertion>', desc: 'Registers a new passkey and returns its assertion. appName becomes the WebAuthn relying-party name in the web implementation.' },
   { name: 'assertPasskeyPrf(allowCredentialId?)', type: '(allowCredentialId?: string) => Promise<PasskeyAssertion>', desc: 'Asserts an existing passkey, optionally scoped to a credential id (discoverable when omitted).' },
