@@ -1,3 +1,4 @@
+import type { WalletEngine } from './engine/engine.ts';
 import {
   EntryFailureCodeFailed,
   EntryKindSend,
@@ -131,3 +132,8 @@ const _watchOnlyClientIsLegacy: WavelengthClient =
   null as unknown as WatchOnlyWalletClient;
 void _legacyClientHasNoWatchOnlyStart;
 void _watchOnlyClientIsLegacy;
+
+// The engine lists descriptors itself, checking its client can at run time.
+const _engineListsDescriptors:
+  'listWalletDescriptors' extends keyof WalletEngine ? true : false = true;
+void _engineListsDescriptors;

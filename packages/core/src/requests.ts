@@ -550,7 +550,8 @@ export type SweepWalletRequest = {
 
 /**
  * A restore request: creation options stay meaningful on import, and exactly
- * one source is mandatory, either a mnemonic or private output descriptors.
+ * one source is mandatory: a mnemonic, private output descriptors, or a remote
+ * signer's watch-only bundle or manifest.
  */
 export type RestoreWalletRequest = CreateWalletRequest &
   (
@@ -558,10 +559,30 @@ export type RestoreWalletRequest = CreateWalletRequest &
         /** The recovery phrase to restore from. */
         mnemonic: string[];
         descriptors?: undefined;
+        watchOnlyBundle?: undefined;
+        watchOnlyManifest?: undefined;
       }
     | {
         /** The private descriptors to restore from. */
         descriptors: string[];
         mnemonic?: undefined;
+        watchOnlyBundle?: undefined;
+        watchOnlyManifest?: undefined;
+      }
+    | {
+        /** The remote signer's bundle to restore a watch-only wallet from. */
+        watchOnlyBundle: string;
+        mnemonic?: undefined;
+        descriptors?: undefined;
+        watchOnlyManifest?: undefined;
+      }
+    | {
+        /** The remote signer's manifest to restore a watch-only wallet from. */
+        watchOnlyManifest: string;
+        /** The authentication private keys that go with the manifest. */
+        authKeys: string;
+        mnemonic?: undefined;
+        descriptors?: undefined;
+        watchOnlyBundle?: undefined;
       }
   );

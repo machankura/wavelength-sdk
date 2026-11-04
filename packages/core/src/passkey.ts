@@ -1,7 +1,7 @@
 /**
  * Labels how a local wallet is unlocked.
  */
-export type WalletKind = 'passkey' | 'password' | 'descriptor';
+export type WalletKind = 'passkey' | 'password' | 'descriptor' | 'watchOnly';
 
 /**
  * A passkey ceremony result: the PRF output (hex) shared with the Go SDK, plus

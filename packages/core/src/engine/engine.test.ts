@@ -1,5 +1,6 @@
 import { describe, it, mock } from 'node:test';
 import assert from 'node:assert/strict';
+import type { WavelengthError } from '../errors.ts';
 import { FORCE_UNROLL_ACK } from '../requests.ts';
 import type { Entry, ListResult } from '../results.ts';
 import type { WalletInfo } from '../state.ts';
@@ -646,7 +647,7 @@ describe('engine restore', () => {
 
     await assert.rejects(
       () => engine.restoreWallet({ password: 'pw' } as never),
-      /a restore needs a mnemonic or descriptors/,
+      /exactly one of a mnemonic, descriptors/,
     );
     await assert.rejects(
       () => engine.restoreWallet({
@@ -654,10 +655,72 @@ describe('engine restore', () => {
         mnemonic: ['a'],
         descriptors: ['tr(x)'],
       } as never),
-      /not both/,
+      /exactly one of/,
+    );
+    await assert.rejects(
+      () => engine.restoreWallet({
+        password: 'pw',
+        descriptors: ['tr(x)'],
+        watchOnlyBundle: 'bundle',
+      } as never),
+      /exactly one of/,
     );
     engine.dispose();
     mock.timers.reset();
+  });
+
+  it('restores a watch-only wallet and carries its manifest hash', async () => {
+    mock.timers.enable({ apis: ['setInterval', 'setTimeout'] });
+    const { client, engine } = await needsWalletEngine();
+    client.info = { ...readyInfo, manifestHash: 'abc123' } as WalletInfo;
+    let created: unknown;
+    client.impl('createWallet', (args) => {
+      created = args[0];
+
+      return Promise.resolve({});
+    });
+
+    const req = { password: 'pw', watchOnlyManifest: '{}', authKeys: 'keys' };
+    await engine.restoreWallet(req);
+    assert.deepEqual(created, req);
+    assert.equal(engine.getSnapshot().phase, 'ready');
+    assert.equal(engine.getSnapshot().info?.manifestHash, 'abc123');
+    engine.dispose();
+    mock.timers.reset();
+  });
+
+  it('lists descriptors through a client that can, and keeps no copy', async () => {
+    const { client, engine } = await needsWalletEngine();
+    const before = engine.getSnapshot();
+    const req = { includePrivate: true, mnemonic: ['a'] };
+    const listed = {
+      descriptors: ['tr(tprvSECRET/86h/0h/0h/<0;1>/*)'],
+      rootFingerprint: 'd34db33f',
+      includesPrivate: true,
+    };
+    let seen: unknown;
+    Object.assign(client, {
+      listWalletDescriptors: (r: unknown) => {
+        seen = r;
+
+        return Promise.resolve(listed);
+      },
+    });
+
+    assert.equal(await engine.listWalletDescriptors(req), listed);
+    assert.equal(seen, req);
+    assert.equal(engine.getSnapshot(), before);
+    engine.dispose();
+  });
+
+  it('refuses to list descriptors through a client that cannot', async () => {
+    const { engine } = await needsWalletEngine();
+    await assert.rejects(
+      engine.listWalletDescriptors(),
+      (err: WavelengthError) => err.code === 'unsupported_facade_method',
+    );
+    engine.dispose();
+    await assert.rejects(engine.listWalletDescriptors(), /disposed/);
   });
 
   it('an untracked restore never touches the recovery banner state', async () => {

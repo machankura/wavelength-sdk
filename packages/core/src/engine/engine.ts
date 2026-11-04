@@ -1,6 +1,6 @@
-import type { WavelengthClient } from '../client.ts';
+import type { DescriptorWalletClient, WavelengthClient } from '../client.ts';
 import type { RuntimeConfig } from '../config.ts';
-import { toError } from '../errors.ts';
+import { toError, WavelengthError } from '../errors.ts';
 import type { WavelengthEvent } from '../events.ts';
 import {
   performanceNow,
@@ -22,6 +22,7 @@ import type {
   GetExitPlanRequest,
   ListRequest,
   OpenWalletFromPasskeyRequest,
+  ListWalletDescriptorsRequest,
   ReceiveRequest,
   RestoreWalletRequest,
   SendRequest,
@@ -33,6 +34,7 @@ import type {
   CreateWalletResult,
   DepositResult,
   Entry,
+  ListWalletDescriptorsResult,
   ExitResult,
   ExitStatusResult,
   ExitSummaryResult,
@@ -141,18 +143,27 @@ export interface WalletEngine {
   /** Creates a new wallet, refetches info, and refreshes in the background. */
   createWallet(req: CreateWalletRequest): Promise<CreateWalletResult>;
   /**
-   * Restores a wallet from a mnemonic. Resolves as soon as the restored
-   * wallet is usable; the optional server-assisted recovery scan continues in
-   * the background, observed through snapshot.recovery. Rejects when the
-   * restore fails before the wallet came up, when a restore is already in
-   * flight, when neither or both of req.mnemonic and req.descriptors are set,
-   * or if the engine has been disposed.
+   * Restores a wallet from a mnemonic, private descriptors, or a remote signer's
+   * watch-only bundle or manifest. Resolves as soon as the restored wallet is
+   * usable; the optional server-assisted recovery scan continues in the
+   * background, observed through snapshot.recovery. Rejects when the restore
+   * fails before the wallet came up, when a restore is already in flight, unless
+   * exactly one source is set, or if the engine has been disposed.
    */
   restoreWallet(req: RestoreWalletRequest): Promise<WalletInfo>;
   /** Resets snapshot.recovery to idle (e.g. after dismissing a banner). */
   acknowledgeRecovery(): void;
   /** Unlocks an existing wallet, refetches info, and refreshes in the background. */
   unlockWallet(req: UnlockWalletRequest): Promise<UnlockWalletResult>;
+  /**
+   * Returns the open wallet's tr and wpkh descriptors: public by default, or
+   * private when the request resupplies the wallet's mnemonic or root
+   * descriptors. Rejects with `unsupported_facade_method` when the client is not
+   * a {@link DescriptorWalletClient}. The engine keeps no copy of the result.
+   */
+  listWalletDescriptors(
+    req?: ListWalletDescriptorsRequest,
+  ): Promise<ListWalletDescriptorsResult>;
   /** Opens the wallet from a passkey PRF output, refetches info, and refreshes in the background. */
   openWalletFromPasskey(
     req: OpenWalletFromPasskeyRequest,
@@ -434,6 +445,20 @@ class WavelengthEngine implements WalletEngine {
       return result;
     });
   }
+  async listWalletDescriptors(
+    req?: ListWalletDescriptorsRequest,
+  ): Promise<ListWalletDescriptorsResult> {
+    this.#assertNotDisposed();
+    const client = this.client as Partial<DescriptorWalletClient>;
+    if (typeof client.listWalletDescriptors !== 'function') {
+      throw new WavelengthError(
+        'this client cannot list wallet descriptors',
+        'unsupported_facade_method',
+      );
+    }
+
+    return client.listWalletDescriptors(req);
+  }
   restoreWallet(req: RestoreWalletRequest): Promise<WalletInfo> {
     // A restore with server-assisted recovery blocks createWallet for the
     // whole indexer scan, but the daemon marks the wallet ready before the
@@ -443,13 +468,18 @@ class WavelengthEngine implements WalletEngine {
     if (this.#disposed) {
       return Promise.reject(new Error('the engine has been disposed'));
     }
-    const hasMnemonic = Boolean(req.mnemonic && req.mnemonic.length > 0);
-    const hasDescriptors = Boolean(
-      req.descriptors && req.descriptors.length > 0,
-    );
-    if (hasMnemonic === hasDescriptors) {
+    const sources = [
+      req.mnemonic?.length,
+      req.descriptors?.length,
+      req.watchOnlyBundle,
+      req.watchOnlyManifest,
+    ].filter(Boolean);
+    if (sources.length !== 1) {
       return Promise.reject(
-        new Error('a restore needs a mnemonic or descriptors, not both'),
+        new Error(
+          'a restore needs exactly one of a mnemonic, descriptors, or a ' +
+            'watch-only bundle or manifest',
+        ),
       );
     }
     if (this.#restore && !this.#restore.settled) {
