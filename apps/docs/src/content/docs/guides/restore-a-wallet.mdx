@@ -71,7 +71,9 @@ A partial account-level set is refused, because the wallet needs every key
 family: `key families 0 to 255 are required` for a lone account, `no BIP86
 account 86'/0'/0'` for families alone. An account key with no origin is refused
 as well, since it is read as a master key. `xpub` descriptors are refused
-because a wallet built this way holds its own keys.
+because a wallet built this way holds its own keys; to keep keys on another
+machine, use a [`WatchOnlyWalletClient`](/reference/wavelength-core/#WatchOnlyWalletClient)
+with a remote signer instead.
 
 On test networks note that the wallet uses coin type `0'` in its on-chain paths,
 unlike wallets that use `1'` there.

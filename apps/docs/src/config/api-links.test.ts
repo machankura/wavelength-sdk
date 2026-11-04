@@ -39,6 +39,13 @@ test('resolves descriptor symbols to their client anchor', () => {
   });
 });
 
+test('resolves watch-only symbols to their client anchor', () => {
+  assert.deepEqual(resolveApiLink('WatchOnlyWalletRequest'), {
+    href: '/reference/wavelength-core/#WatchOnlyWalletClient',
+    symbol: 'WatchOnlyWalletRequest',
+  });
+});
+
 test('resolves a transport symbol to its package reference page', () => {
   assert.deepEqual(resolveApiLink('createNativeWalletEngine'), {
     href: '/reference/wavelength-react-native/#createNativeWalletEngine',

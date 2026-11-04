@@ -309,6 +309,13 @@ and unavailable inside a Worker); the daemon shipped with this package already
 does this. See the [browser support guide](/web/support/browser-support/) for
 which browsers provide OPFS and the other APIs worker mode depends on.
 
+### Remote signers
+
+The web transport cannot use a remote signer, because a browser runtime cannot
+dial one. Any `remoteSigner*` config field and
+[`startWatchOnlyWallet()`](/reference/wavelength-core/#WatchOnlyWalletClient)
+reject with `invalid_config`.
+
 ### External-seed profile locking
 
 [`startExternalSeedWallet()`](/reference/wavelength-core/#startExternalSeedWallet)

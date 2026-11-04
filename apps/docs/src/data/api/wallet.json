@@ -437,7 +437,39 @@
           "repeated": false,
           "optional": false,
           "oneof": null,
-          "comment": "birthday_unix is the earliest time, in Unix seconds, at which the\ndescriptor keys may have received funds. Zero scans from genesis.\nOnly used with descriptors."
+          "comment": "birthday_unix is the earliest time, in Unix seconds, at which the\ndescriptor keys may have received funds. Zero scans from genesis.\nOnly used with descriptors or a watch-only bundle."
+        },
+        {
+          "name": "watch_only_bundle",
+          "type": "bytes",
+          "repeated": false,
+          "optional": false,
+          "oneof": null,
+          "comment": "watch_only_bundle holds account public keys for a wallet whose\nprivate keys stay on a remote signer. See\nwaverpc.InitWalletRequest.watch_only_bundle for the accepted forms."
+        },
+        {
+          "name": "watch_only_manifest",
+          "type": "bytes",
+          "repeated": false,
+          "optional": false,
+          "oneof": null,
+          "comment": "watch_only_manifest creates a wallet whose fund slots come from\nseveral keys. See waverpc.InitWalletRequest.watch_only_manifest."
+        },
+        {
+          "name": "auth_keys",
+          "type": "bytes",
+          "repeated": false,
+          "optional": false,
+          "oneof": null,
+          "comment": "auth_keys holds the authentication families' private keys that go\nwith watch_only_manifest. Secret."
+        },
+        {
+          "name": "override_identity",
+          "type": "bool",
+          "repeated": false,
+          "optional": false,
+          "oneof": null,
+          "comment": "override_identity allows a manifest that replaces key family 6,\nwhich gives the new wallet a different identity. See\nwaverpc.InitWalletRequest.override_identity."
         }
       ]
     },
@@ -524,6 +556,14 @@
           "optional": false,
           "oneof": null,
           "comment": "root_fingerprint is the hex-encoded BIP32 fingerprint of the wallet's\nmaster key."
+        },
+        {
+          "name": "manifest_hash",
+          "type": "string",
+          "repeated": false,
+          "optional": false,
+          "oneof": null,
+          "comment": "manifest_hash is the hex SHA-256 of the manifest the wallet was\ncreated from, when it was created from one."
         }
       ]
     },

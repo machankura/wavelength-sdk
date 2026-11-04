@@ -137,6 +137,29 @@ this package. Persist the returned `identityPubKey` and supply it as
 `expectedIdentityPubKey` on later opens if the app wants to bind a selected
 folder to the expected wallet identity.
 
+### Watch-only startup
+
+The native client also forwards
+[`startWatchOnlyWallet(config, req)`](/reference/wavelength-core/#WatchOnlyWalletClient),
+for a wallet whose fund keys live on a remote signer. The config names the
+signer, and the macaroon and certificate paths must be readable by the app:
+
+```ts
+await client.startWatchOnlyWallet(
+  {
+    ...config,
+    dataDir: finalProfileDataDir,
+    remoteSignerRpcHost: 'signer.example.com:10009',
+    remoteSignerMacaroonPath: `${appFiles}/signer.macaroon`,
+    remoteSignerTlsCertPath: `${appFiles}/signer.cert`,
+  },
+  { bundle: signerExport, walletPassword },
+);
+```
+
+Supply the same bundle or manifest on every open. The start fails if the signer
+is unreachable or does not hold the keys the wallet expects.
+
 <ApiSymbol name="createNativeWalletEngine" kind="function">
 
 Creates a [`WalletEngine`](/reference/wavelength-core/#WalletEngine) over the React Native transport: the one-call setup for an RN app. It builds the client with `createNativeClient()` internally, so you only need this one factory. Pass the result to `WavelengthProvider` from [wavelength-react](/reference/wavelength-react/).

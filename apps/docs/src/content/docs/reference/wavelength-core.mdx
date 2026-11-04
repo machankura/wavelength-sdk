@@ -74,6 +74,11 @@ export const runtimeConfigSig = `type RuntimeConfig = {
   maxPaymentCLTV?: number;
   signingWorkers?: number;
   bufferSize?: number;
+  remoteSignerRpcHost?: string;
+  remoteSignerMacaroonPath?: string;
+  remoteSignerTlsCertPath?: string;
+  remoteSignerConnectTimeoutSeconds?: number;
+  remoteSignerRequestTimeoutSeconds?: number;
 };`;
 
 export const networkSig = `type Network = 'mainnet' | 'testnet' | 'testnet4' | 'signet' | 'regtest';`;
@@ -194,6 +199,11 @@ const config: RuntimeConfig = {
   { name: 'maxPaymentCLTV', type: 'number', desc: 'Largest total Lightning payment CLTV, in blocks, reserved by automatic VTXO maintenance. Omit it to use the daemon default. The mobile facade distinguishes an explicit zero from omission and uses zero to disable the reserve. Must be a nonnegative safe integer that fits in int32.' },
   { name: 'signingWorkers', type: 'number', desc: 'Signing worker count. Must be a nonnegative safe integer.' },
   { name: 'bufferSize', type: 'number', desc: 'Runtime buffer size. Must be a nonnegative safe integer.' },
+  { name: 'remoteSignerRpcHost', type: 'string', desc: 'The host:port of the remote signer that holds a watch-only wallet\'s fund keys. Native transports only; the web transport rejects every remote signer field.' },
+  { name: 'remoteSignerMacaroonPath', type: 'string', desc: 'Filesystem path to the macaroon the signer issued for this wallet.' },
+  { name: 'remoteSignerTlsCertPath', type: 'string', desc: 'Filesystem path to the signer\'s TLS certificate.' },
+  { name: 'remoteSignerConnectTimeoutSeconds', type: 'number', desc: 'How long to wait for the signer to connect. Zero or unset selects the daemon default.' },
+  { name: 'remoteSignerRequestTimeoutSeconds', type: 'number', desc: 'How long each signing request may take. Zero or unset selects the daemon default.' },
 ]} />
 
 The SDK validates `RuntimeConfig` before it starts the daemon. It rejects
@@ -294,7 +304,7 @@ The daemon's ordinary start verb accepts this lower-level shape; the SDK builds
 it from your [`RuntimeConfig`](#RuntimeConfig) when you call
 `client.start(config)`. Lifecycle verbs are not reachable through `callFacade`,
 which rejects `'start'`, `'startExternalSeedWallet'`, `'startDescriptorWallet'`,
-and `'stop'` so transport lifecycle guards are never bypassed.
+`'startWatchOnlyWallet'`, and `'stop'` so transport lifecycle guards are never bypassed.
 
 </ApiSymbol>
 
@@ -361,6 +371,24 @@ export const listWalletDescriptorsRequestSig = `type ListWalletDescriptorsReques
   mnemonic?: string[];
   seedPassphrase?: string;
   descriptors?: string[];
+};`;
+export const watchOnlyWalletClientSig = `interface WatchOnlyWalletClient
+  extends WavelengthClient {
+  startWatchOnlyWallet(
+    config: RuntimeConfig,
+    req: WatchOnlyWalletRequest,
+  ): Promise<WatchOnlyWalletOpenResult>;
+}`;
+export const watchOnlyWalletRequestSig = `type WatchOnlyWalletRequest = {
+  bundle?: string;
+  manifest?: string;
+  authKeys?: string;
+  overrideIdentity?: boolean;
+  walletPassword: string;
+  birthday?: Date;
+  expectedIdentityPubKey?: string;
+  recoverState?: boolean;
+  recoveryWindow?: number;
 };`;
 export const readySig = `ready(): Promise<void>`;
 export const startSig = `start(config: RuntimeConfig): Promise<WalletInfo>`;
@@ -463,6 +491,45 @@ before rendering anything private. Use it to move a mnemonic wallet into
 descriptor-based software.
 
 <Signature title="wavelength-core.d.ts" code={listWalletDescriptorsRequestSig} />
+
+</ApiSymbol>
+
+<ApiSymbol name="WatchOnlyWalletClient" kind="type">
+
+An additive transport capability for wallets whose fund keys live on a remote
+signer such as `wavesigner`. It extends [`WavelengthClient`](#WavelengthClient)
+without changing the standard client contract. Only native transports can use
+it: a browser runtime cannot dial a signer, so on the web transport
+`startWatchOnlyWallet` always rejects with `invalid_config`.
+
+<Signature title="wavelength-core.d.ts" code={watchOnlyWalletClientSig} />
+
+`startWatchOnlyWallet(config, req)` follows the
+[`startExternalSeedWallet()`](#startExternalSeedWallet) contract with the
+signer's export in place of entropy: it requires a final nonempty
+`config.dataDir`, imports into an empty profile or unlocks the wallet already
+there, and resolves once wallet services are ready. The config must also set
+`remoteSignerRpcHost`, `remoteSignerMacaroonPath` and
+`remoteSignerTlsCertPath`, and the signer must be reachable, because it has to
+sign a challenge with every key slot on each start.
+
+<Signature title="wavelength-core.d.ts" code={watchOnlyWalletRequestSig} />
+
+<ParamsTable rows={[
+  { name: 'bundle', type: 'string', desc: 'The signer\'s `export-watchonly` output. A minimal bundle holds private authentication keys; treat it as a secret. Exactly one of bundle and manifest is required on every open.' },
+  { name: 'manifest', type: 'string', desc: 'The JSON manifest of a signer with per-slot key overrides.' },
+  { name: 'authKeys', type: 'string', desc: 'The private authentication keys that go with a manifest. Required with one, refused with a bundle.' },
+  { name: 'overrideIdentity', type: 'boolean', desc: 'Allows a manifest that replaces the identity family\'s key, which changes the wallet\'s identity. Refused with a bundle.' },
+  { name: 'walletPassword', type: 'string', desc: 'Protects the wallet database and any authentication keys it keeps. A watch-only wallet has no seed to derive it from, so the host must supply and keep it.' },
+  { name: 'birthday', type: 'Date', desc: 'Optional earliest date the keys may have received funds. It bounds the first rescan; omit it to scan from genesis.' },
+  { name: 'expectedIdentityPubKey', type: 'string', desc: 'Optional identity observed on an earlier open, checked before the daemon starts.' },
+  { name: 'recoverState', type: 'boolean', desc: 'Optional per-start request to scan for wallet state.' },
+  { name: 'recoveryWindow', type: 'number', desc: 'Optional per-key-family recovery look-ahead that must fit in uint32.' },
+]} />
+
+The result adds `manifestHash` to the descriptor wallet result. It is empty for
+a wallet created from a bundle. An invalid request rejects with
+`invalid_watch_only` before anything starts.
 
 </ApiSymbol>
 
@@ -2643,7 +2710,8 @@ exit and sweep flow end to end.
 ## Portable facade calls
 
 export const facadeMethodSig = `type FacadeMethod =
-  | 'start' | 'startExternalSeedWallet' | 'startDescriptorWallet' | 'stop'
+  | 'start' | 'startExternalSeedWallet' | 'startDescriptorWallet'
+  | 'startWatchOnlyWallet' | 'stop'
   | 'getInfo' | 'status' | 'balance'
   | 'createWallet' | 'unlockWallet' | 'openWalletFromPasskey'
   | 'listWalletDescriptors'
